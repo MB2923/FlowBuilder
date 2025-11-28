@@ -46,11 +46,11 @@ const CATALOG_FOLDERS: CatalogFolderConfig[] = [
     path: 'examples' // Example folder
   },
   {
-    id: 'my-flows',
-    name: 'My Saved Flows',
-    owner: 'your-username',
-    repo: 'your-repo',
-    path: 'flowcharts'
+    id: 'default',
+    name: 'default',
+    owner: 'MB2923',
+    repo: 'flowbuilder-charts',
+    path: ''
   }
 ];
 
