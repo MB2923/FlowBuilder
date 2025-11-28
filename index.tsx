@@ -23,18 +23,63 @@ import {
   Save, Upload, Play, Plus, Trash2, 
   ChevronRight, ArrowLeft, Check, Circle, CheckSquare, 
   FileText, Flag, Settings, RotateCcw, Layout,
-  Link as LinkIcon, X
+  Link as LinkIcon, X, Book, Folder, FileJson, Loader2
 } from 'lucide-react';
 
+// --- CATALOG CONFIGURATION ---
+// Define your GitHub folders here.
+// The app will fetch: https://api.github.com/repos/{owner}/{repo}/contents/{path}
+interface CatalogFolderConfig {
+  id: string;
+  name: string;
+  owner: string;
+  repo: string;
+  path: string;
+}
+
+const CATALOG_FOLDERS: CatalogFolderConfig[] = [
+  {
+    id: 'demo-1',
+    name: 'Example Flowcharts',
+    owner: 'langchain-ai', // Example: public repo
+    repo: 'langgraph-example', // Example: public repo
+    path: 'examples' // Example folder
+  },
+  {
+    id: 'my-flows',
+    name: 'My Saved Flows',
+    owner: 'your-username',
+    repo: 'your-repo',
+    path: 'flowcharts'
+  }
+];
+
 // --- Error Suppression ---
-// ResizeObserver loop completed with undelivered notifications.
-// This is a benign error often caused by generic layout thrashing in complex flex/grid containers
-const resizeObserverLoopErr = 'ResizeObserver loop completed with undelivered notifications.';
+// ResizeObserver loop errors are benign layout thrashing warnings common in complex flex/grid + canvas apps.
+const resizeObserverLoopErr = 'ResizeObserver loop completed with undelivered notifications';
+const resizeObserverLoopLimitErr = 'ResizeObserver loop limit exceeded';
+
 window.addEventListener('error', (e) => {
-  if (e.message === resizeObserverLoopErr) {
+  if (
+    e.message.includes(resizeObserverLoopErr) ||
+    e.message.includes(resizeObserverLoopLimitErr)
+  ) {
     e.stopImmediatePropagation();
+    e.preventDefault();
   }
 });
+
+// Patch console.error to catch frameworks/overlays that might intercept this
+const originalConsoleError = console.error;
+console.error = (...args: any[]) => {
+  if (
+    typeof args[0] === 'string' && 
+    (args[0].includes(resizeObserverLoopErr) || args[0].includes(resizeObserverLoopLimitErr))
+  ) {
+    return;
+  }
+  originalConsoleError(...args);
+};
 
 // --- Types ---
 
@@ -665,6 +710,12 @@ const DraggableToolboxItem = ({ type }: { type: NodeType }) => {
   );
 };
 
+interface GitHubFile {
+  name: string;
+  download_url: string;
+  type: 'file' | 'dir';
+}
+
 const App = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState<AppNode>(INITIAL_NODES);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -674,6 +725,12 @@ const App = () => {
   // Modal State
   const [showUrlModal, setShowUrlModal] = useState(false);
   const [importUrl, setImportUrl] = useState('');
+
+  // Catalog State
+  const [isCatalogOpen, setIsCatalogOpen] = useState(false);
+  const [activeFolder, setActiveFolder] = useState<CatalogFolderConfig | null>(null);
+  const [repoFiles, setRepoFiles] = useState<GitHubFile[]>([]);
+  const [loadingCatalog, setLoadingCatalog] = useState(false);
 
   const { deleteElements, screenToFlowPosition } = useReactFlow<AppNode>();
 
@@ -707,7 +764,6 @@ const App = () => {
       if (['Delete', 'Backspace'].includes(event.key)) {
         if (selectedElements.nodes.length > 0 || selectedElements.edges.length > 0) {
           deleteElements({ nodes: selectedElements.nodes, edges: selectedElements.edges });
-          // Note: onNodesChange will be triggered, which updates the nodes state.
         }
       }
     };
@@ -778,6 +834,15 @@ const App = () => {
     link.click();
   };
 
+  const loadFlowData = (data: any) => {
+    if (data.nodes && Array.isArray(data.nodes) && data.edges && Array.isArray(data.edges)) {
+      setNodes(data.nodes);
+      setEdges(data.edges);
+      return true;
+    }
+    return false;
+  };
+
   const handleLoad = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -785,9 +850,8 @@ const App = () => {
     reader.onload = (event) => {
       try {
         const result = JSON.parse(event.target?.result as string);
-        if (result.nodes && result.edges) {
-          setNodes(result.nodes);
-          setEdges(result.edges);
+        if (!loadFlowData(result)) {
+           alert('Invalid JSON file');
         }
       } catch (err) {
         alert('Invalid JSON file');
@@ -800,36 +864,92 @@ const App = () => {
     setShowUrlModal(true);
   };
 
-  const executeUrlImport = async () => {
-    if (!importUrl) return;
+  const executeUrlImport = async (url: string) => {
+    if (!url) return;
+    let urlToFetch = url.trim();
+
+    // Fix common user error: Using GitHub blob link instead of raw
+    if (urlToFetch.includes('github.com') && urlToFetch.includes('/blob/')) {
+      urlToFetch = urlToFetch.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/');
+    }
 
     try {
-      const res = await fetch(importUrl);
-      if (!res.ok) throw new Error('Failed to fetch');
+      const res = await fetch(urlToFetch);
+      if (!res.ok) throw new Error(`Status ${res.status}`);
       const data = await res.json();
       
-      if (data.nodes && Array.isArray(data.nodes) && data.edges && Array.isArray(data.edges)) {
-        setNodes(data.nodes);
-        setEdges(data.edges);
-        setShowUrlModal(false);
-        setImportUrl('');
+      if (loadFlowData(data)) {
+        return true;
       } else {
-        alert('Invalid flowchart JSON format.');
+        alert('Invalid flowchart JSON structure.');
+        return false;
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert('Error loading from URL. Ensure the URL is accessible and CORS is enabled.');
+      const isCors = error.name === 'TypeError' && (error.message === 'Failed to fetch' || error.message.includes('NetworkError'));
+      let msg = `Import Failed: ${error.message}`;
+      if (isCors) msg = `Network Error (CORS). ensure "raw" link used.`;
+      alert(msg);
+      return false;
+    }
+  };
+  
+  // Catalog Handlers
+  const fetchFolderContents = async (folder: CatalogFolderConfig) => {
+    setActiveFolder(folder);
+    setLoadingCatalog(true);
+    setRepoFiles([]);
+    
+    try {
+      const url = `https://api.github.com/repos/${folder.owner}/${folder.repo}/contents/${folder.path}`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+           // Filter for json files
+           const files = data.filter((item: any) => item.type === 'file' && item.name.endsWith('.json'));
+           setRepoFiles(files);
+        } else {
+           setRepoFiles([]);
+           alert('Unexpected response from GitHub.');
+        }
+      } else {
+        alert('Failed to load folder. Check configuration or rate limits.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Network error fetching catalog.');
+    } finally {
+      setLoadingCatalog(false);
+    }
+  };
+
+  const loadCatalogFile = async (file: GitHubFile) => {
+    setLoadingCatalog(true);
+    const success = await executeUrlImport(file.download_url);
+    setLoadingCatalog(false);
+    if (success) {
+      setIsCatalogOpen(false); // Close sidebar on success
     }
   };
 
   return (
-    <div className="w-screen h-screen flex flex-col overflow-hidden bg-gray-50">
+    <div className="w-screen h-screen flex flex-col overflow-hidden bg-gray-50 relative">
       
       {/* Top Bar */}
-      <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 shadow-sm z-20 relative">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white font-bold">F</div>
-          <h1 className="font-bold text-gray-900 hidden sm:block">FlowBuilder</h1>
+      <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 shadow-sm z-20 relative shrink-0">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white font-bold">F</div>
+            <h1 className="font-bold text-gray-900 hidden sm:block">FlowBuilder</h1>
+          </div>
+          
+          <button 
+             onClick={() => setIsCatalogOpen(!isCatalogOpen)}
+             className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${isCatalogOpen ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+          >
+             <Book size={16} /> Catalog
+          </button>
         </div>
 
         {/* Toolbox Area */}
@@ -868,6 +988,81 @@ const App = () => {
           </button>
         </div>
       </header>
+
+      {/* Catalog Sidebar */}
+      <div 
+        className={`absolute top-16 left-0 bottom-0 bg-white shadow-xl border-r border-gray-200 z-30 transition-all duration-300 ease-in-out flex flex-col ${isCatalogOpen ? 'w-80 translate-x-0' : 'w-80 -translate-x-full'}`}
+      >
+        <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+           <h3 className="font-bold text-gray-800 flex items-center gap-2">
+             {activeFolder ? (
+               <button onClick={() => setActiveFolder(null)} className="hover:bg-gray-200 p-1 rounded"><ArrowLeft size={16}/></button>
+             ) : <Book size={18}/>}
+             {activeFolder ? activeFolder.name : 'Catalog Folders'}
+           </h3>
+           <button onClick={() => setIsCatalogOpen(false)}><X size={18} className="text-gray-400 hover:text-gray-600"/></button>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-4">
+          {loadingCatalog ? (
+            <div className="flex flex-col items-center justify-center h-40 text-gray-500">
+               <Loader2 className="animate-spin mb-2" />
+               <span className="text-xs">Loading contents...</span>
+            </div>
+          ) : (
+             <>
+               {/* Folder List View */}
+               {!activeFolder && (
+                 <div className="space-y-2">
+                   {CATALOG_FOLDERS.map(folder => (
+                     <div 
+                        key={folder.id} 
+                        onClick={() => fetchFolderContents(folder)}
+                        className="p-3 rounded border border-gray-200 hover:border-blue-400 hover:bg-blue-50 cursor-pointer transition-colors flex items-center gap-3 group"
+                      >
+                        <div className="p-2 bg-blue-100 text-blue-600 rounded group-hover:bg-blue-200">
+                           <Folder size={20} />
+                        </div>
+                        <div>
+                          <div className="font-semibold text-gray-800 text-sm">{folder.name}</div>
+                          <div className="text-xs text-gray-500 truncate max-w-[160px]">{folder.owner}/{folder.repo}</div>
+                        </div>
+                        <ChevronRight size={16} className="ml-auto text-gray-400 group-hover:text-blue-500"/>
+                     </div>
+                   ))}
+                 </div>
+               )}
+
+               {/* File List View */}
+               {activeFolder && (
+                 <div className="space-y-2">
+                    {repoFiles.length === 0 ? (
+                      <div className="text-center text-gray-400 text-sm py-8 italic">No .json files found in this folder.</div>
+                    ) : (
+                      repoFiles.map(file => (
+                        <div 
+                          key={file.name}
+                          onClick={() => loadCatalogFile(file)}
+                          className="p-3 rounded border border-gray-200 hover:border-green-400 hover:bg-green-50 cursor-pointer transition-colors flex items-center gap-3 group"
+                        >
+                          <div className="p-2 bg-green-100 text-green-600 rounded group-hover:bg-green-200">
+                             <FileJson size={20} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                             <div className="font-semibold text-gray-800 text-sm truncate">{file.name}</div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                 </div>
+               )}
+             </>
+          )}
+        </div>
+        <div className="p-3 bg-gray-50 border-t border-gray-200 text-[10px] text-gray-500 text-center">
+           Edit CATALOG_FOLDERS in index.tsx to add your own repos.
+        </div>
+      </div>
 
       {/* Editor Body */}
       <div className="flex-1 flex overflow-hidden relative">
@@ -929,7 +1124,11 @@ const App = () => {
                   Cancel
                 </button>
                 <button
-                  onClick={executeUrlImport}
+                  onClick={() => {
+                    executeUrlImport(importUrl).then(success => {
+                       if(success) { setShowUrlModal(false); setImportUrl(''); }
+                    });
+                  }}
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium"
                 >
                   Import
