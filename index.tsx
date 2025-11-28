@@ -22,8 +22,19 @@ import dagre from 'dagre';
 import { 
   Save, Upload, Play, Plus, Trash2, 
   ChevronRight, ArrowLeft, Check, Circle, CheckSquare, 
-  FileText, Flag, Settings, RotateCcw, Layout
+  FileText, Flag, Settings, RotateCcw, Layout,
+  Link as LinkIcon, X
 } from 'lucide-react';
+
+// --- Error Suppression ---
+// ResizeObserver loop completed with undelivered notifications.
+// This is a benign error often caused by generic layout thrashing in complex flex/grid containers
+const resizeObserverLoopErr = 'ResizeObserver loop completed with undelivered notifications.';
+window.addEventListener('error', (e) => {
+  if (e.message === resizeObserverLoopErr) {
+    e.stopImmediatePropagation();
+  }
+});
 
 // --- Types ---
 
@@ -49,6 +60,7 @@ interface NodeData {
   options?: Option[]; // For radio/checkbox
   paths?: LogicPath[]; // For checkbox logic specifically
   canRestart?: boolean; // For end node
+  [key: string]: unknown; // Fix: Index signature for Record<string, unknown> compatibility
 }
 
 type AppNode = Node<NodeData>;
@@ -522,7 +534,7 @@ const Viewer = ({
             {nextNodes.length > 0 && <div className="w-[300px] h-[2px] bg-slate-400 absolute right-[25%]"></div>}
         </div>
 
-        <div className="w-full max-w-[90vw] grid grid-cols-3 gap-32 items-center h-full relative z-10">
+        <div className="w-full max-w-[90vw] grid grid-cols-3 gap-48 items-center h-full relative z-10">
           
           {/* LEFT COLUMN: Past */}
           <div className="flex flex-col items-end justify-center gap-4 opacity-80 transition-all duration-500">
@@ -654,12 +666,16 @@ const DraggableToolboxItem = ({ type }: { type: NodeType }) => {
 };
 
 const App = () => {
-  const [nodes, setNodes, onNodesChange] = useNodesState(INITIAL_NODES);
+  const [nodes, setNodes, onNodesChange] = useNodesState<AppNode>(INITIAL_NODES);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [mode, setMode] = useState<FlowMode>('editor');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
-  const { deleteElements, screenToFlowPosition } = useReactFlow();
+  // Modal State
+  const [showUrlModal, setShowUrlModal] = useState(false);
+  const [importUrl, setImportUrl] = useState('');
+
+  const { deleteElements, screenToFlowPosition } = useReactFlow<AppNode>();
 
   // Selection state for global delete
   const [selectedElements, setSelectedElements] = useState<{ nodes: AppNode[], edges: Edge[] }>({ nodes: [], edges: [] });
@@ -780,6 +796,32 @@ const App = () => {
     reader.readAsText(file);
   };
 
+  const handleImportFromUrl = () => {
+    setShowUrlModal(true);
+  };
+
+  const executeUrlImport = async () => {
+    if (!importUrl) return;
+
+    try {
+      const res = await fetch(importUrl);
+      if (!res.ok) throw new Error('Failed to fetch');
+      const data = await res.json();
+      
+      if (data.nodes && Array.isArray(data.nodes) && data.edges && Array.isArray(data.edges)) {
+        setNodes(data.nodes);
+        setEdges(data.edges);
+        setShowUrlModal(false);
+        setImportUrl('');
+      } else {
+        alert('Invalid flowchart JSON format.');
+      }
+    } catch (error) {
+      console.error(error);
+      alert('Error loading from URL. Ensure the URL is accessible and CORS is enabled.');
+    }
+  };
+
   return (
     <div className="w-screen h-screen flex flex-col overflow-hidden bg-gray-50">
       
@@ -807,10 +849,13 @@ const App = () => {
              <Layout size={18} />
           </button>
           <div className="h-6 w-px bg-gray-300 mx-1"></div>
-          <label title="Import" className="p-2 text-gray-700 hover:bg-gray-100 rounded cursor-pointer text-sm flex gap-1 items-center font-medium transition-colors">
+          <label title="Import from File" className="p-2 text-gray-700 hover:bg-gray-100 rounded cursor-pointer text-sm flex gap-1 items-center font-medium transition-colors">
             <Upload size={18} />
             <input type="file" accept=".json" onChange={handleLoad} className="hidden" />
           </label>
+          <button onClick={handleImportFromUrl} title="Import from URL" className="p-2 text-gray-700 hover:bg-gray-100 rounded text-sm flex gap-1 items-center font-medium transition-colors">
+            <LinkIcon size={18} />
+          </button>
           <button onClick={handleSave} title="Save" className="p-2 text-gray-700 hover:bg-gray-100 rounded text-sm flex gap-1 items-center font-medium transition-colors">
             <Save size={18} />
           </button>
@@ -828,7 +873,7 @@ const App = () => {
       <div className="flex-1 flex overflow-hidden relative">
         {/* Canvas */}
         <div className="flex-1 h-full bg-slate-50 relative">
-          <ReactFlow
+          <ReactFlow<AppNode>
             nodes={nodes}
             edges={edges}
             onNodesChange={onNodesChange}
@@ -853,6 +898,47 @@ const App = () => {
           <PropertiesPanel selectedNode={selectedNode} updateNode={updateNode} />
         )}
       </div>
+
+      {/* URL Import Modal */}
+      {showUrlModal && (
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h3 className="font-bold text-gray-800">Import from URL</h3>
+              <button onClick={() => setShowUrlModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6">
+              <p className="text-sm text-gray-600 mb-3">
+                Enter a direct link to a raw JSON file containing the flowchart data.
+              </p>
+              <input
+                type="text"
+                className="w-full p-3 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-gray-800 text-sm mb-4"
+                placeholder="https://example.com/flowchart.json"
+                value={importUrl}
+                onChange={(e) => setImportUrl(e.target.value)}
+                autoFocus
+              />
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setShowUrlModal(false)}
+                  className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded text-sm font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={executeUrlImport}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium"
+                >
+                  Import
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Viewer Overlay */}
       {mode === 'viewer' && (
