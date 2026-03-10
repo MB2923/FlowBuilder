@@ -110,6 +110,16 @@ interface NodeData {
 
 type AppNode = Node<NodeData>;
 
+interface FlowData {
+  nodes: AppNode[];
+  edges: Edge[];
+}
+
+interface AppErrorLike {
+  name?: string;
+  message?: string;
+}
+
 // --- Constants ---
 
 const INITIAL_NODES: AppNode[] = [
@@ -179,6 +189,12 @@ const getLayoutedElements = (nodes: AppNode[], edges: Edge[]) => {
   });
 
   return { nodes: layoutedNodes, edges };
+};
+
+const isFlowData = (value: unknown): value is FlowData => {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<FlowData>;
+  return Array.isArray(candidate.nodes) && Array.isArray(candidate.edges);
 };
 
 // --- Custom Node Components (Editor) ---
@@ -832,10 +848,11 @@ const App = () => {
     link.href = url;
     link.download = 'flowchart.json';
     link.click();
+    URL.revokeObjectURL(url);
   };
 
-  const loadFlowData = (data: any) => {
-    if (data.nodes && Array.isArray(data.nodes) && data.edges && Array.isArray(data.edges)) {
+  const loadFlowData = (data: unknown) => {
+    if (isFlowData(data)) {
       setNodes(data.nodes);
       setEdges(data.edges);
       return true;
@@ -853,8 +870,10 @@ const App = () => {
         if (!loadFlowData(result)) {
            alert('Invalid JSON file');
         }
-      } catch (err) {
+      } catch {
         alert('Invalid JSON file');
+      } finally {
+        e.target.value = '';
       }
     };
     reader.readAsText(file);
@@ -884,10 +903,14 @@ const App = () => {
         alert('Invalid flowchart JSON structure.');
         return false;
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const appError = error as AppErrorLike;
       console.error(error);
-      const isCors = error.name === 'TypeError' && (error.message === 'Failed to fetch' || error.message.includes('NetworkError'));
-      let msg = `Import Failed: ${error.message}`;
+      const errorMessage = appError.message ?? 'Unknown error';
+      const isCors =
+        appError.name === 'TypeError' &&
+        (errorMessage === 'Failed to fetch' || errorMessage.includes('NetworkError'));
+      let msg = `Import Failed: ${errorMessage}`;
       if (isCors) msg = `Network Error (CORS). ensure "raw" link used.`;
       alert(msg);
       return false;
@@ -907,7 +930,9 @@ const App = () => {
         const data = await res.json();
         if (Array.isArray(data)) {
            // Filter for json files
-           const files = data.filter((item: any) => item.type === 'file' && item.name.endsWith('.json'));
+           const files = data.filter(
+             (item: GitHubFile) => item.type === 'file' && item.name.endsWith('.json'),
+           );
            setRepoFiles(files);
         } else {
            setRepoFiles([]);
