@@ -22,7 +22,7 @@ import dagre from 'dagre';
 import { 
   Save, Upload, Play, Plus, Trash2, 
   ChevronRight, ArrowLeft, Check, Circle, CheckSquare, 
-  FileText, Flag, Settings, RotateCcw, Layout,
+  FileText, Flag, Settings, RotateCcw, Layout, Moon, Sun,
   Link as LinkIcon, X, Book, Folder, FileJson, Loader2
 } from 'lucide-react';
 
@@ -737,6 +737,7 @@ const App = () => {
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [mode, setMode] = useState<FlowMode>('editor');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [isDarkMode, setIsDarkMode] = useState(false);
 
   // Modal State
   const [showUrlModal, setShowUrlModal] = useState(false);
@@ -766,6 +767,20 @@ const App = () => {
   });
 
   // Global Delete Handler
+  useEffect(() => {
+    const storedTheme = localStorage.getItem('flowbuilder-theme');
+    if (storedTheme) {
+      setIsDarkMode(storedTheme === 'dark');
+      return;
+    }
+
+    setIsDarkMode(window.matchMedia('(prefers-color-scheme: dark)').matches);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('flowbuilder-theme', isDarkMode ? 'dark' : 'light');
+  }, [isDarkMode]);
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       // Allow default behavior for inputs
@@ -959,19 +974,25 @@ const App = () => {
   };
 
   return (
-    <div className="w-screen h-screen flex flex-col overflow-hidden bg-gray-50 relative">
+    <div className={`w-screen h-screen flex flex-col overflow-hidden relative transition-colors ${isDarkMode ? 'bg-slate-950' : 'bg-gray-50'}`}>
       
       {/* Top Bar */}
-      <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 shadow-sm z-20 relative shrink-0">
+      <header className={`h-16 border-b flex items-center justify-between px-6 shadow-sm z-20 relative shrink-0 transition-colors ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-200'}`}>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white font-bold">F</div>
-            <h1 className="font-bold text-gray-900 hidden sm:block">FlowBuilder</h1>
+            <h1 className={`font-bold hidden sm:block ${isDarkMode ? 'text-slate-100' : 'text-gray-900'}`}>FlowBuilder</h1>
           </div>
           
           <button 
              onClick={() => setIsCatalogOpen(!isCatalogOpen)}
-             className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${isCatalogOpen ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+             className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+               isCatalogOpen
+                 ? 'bg-blue-100 text-blue-700'
+                 : isDarkMode
+                   ? 'bg-slate-800 text-slate-100 hover:bg-slate-700'
+                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+             }`}
           >
              <Book size={16} /> Catalog
           </button>
@@ -979,32 +1000,39 @@ const App = () => {
 
         {/* Toolbox Area */}
         <div className="flex items-center justify-center gap-4 mx-4 flex-1">
-          <div className="bg-gray-100 rounded-lg p-1 flex items-center gap-2 border border-gray-200">
+          <div className={`rounded-lg p-1 flex items-center gap-2 border transition-colors ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-gray-100 border-gray-200'}`}>
              <DraggableToolboxItem type="static" />
              <DraggableToolboxItem type="radio" />
              <DraggableToolboxItem type="checkbox" />
              <DraggableToolboxItem type="end" />
           </div>
-          <span className="text-xs text-gray-400 font-medium hidden lg:inline">Drag items to canvas</span>
+          <span className={`text-xs font-medium hidden lg:inline ${isDarkMode ? 'text-slate-400' : 'text-gray-400'}`}>Drag items to canvas</span>
         </div>
         
         {/* Actions */}
         <div className="flex items-center gap-3">
-          <button onClick={handleLayout} title="Auto Layout" className="p-2 text-gray-700 hover:bg-gray-100 rounded text-sm flex gap-1 font-medium transition-colors">
+          <button
+            onClick={() => setIsDarkMode(prev => !prev)}
+            title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            className={`p-2 rounded text-sm flex gap-1 font-medium transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-100'}`}
+          >
+            {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+          <button onClick={handleLayout} title="Auto Layout" className={`p-2 rounded text-sm flex gap-1 font-medium transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-100'}`}>
              <Layout size={18} />
           </button>
-          <div className="h-6 w-px bg-gray-300 mx-1"></div>
-          <label title="Import from File" className="p-2 text-gray-700 hover:bg-gray-100 rounded cursor-pointer text-sm flex gap-1 items-center font-medium transition-colors">
+          <div className={`h-6 w-px mx-1 ${isDarkMode ? 'bg-slate-600' : 'bg-gray-300'}`}></div>
+          <label title="Import from File" className={`p-2 rounded cursor-pointer text-sm flex gap-1 items-center font-medium transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-100'}`}>
             <Upload size={18} />
             <input type="file" accept=".json" onChange={handleLoad} className="hidden" />
           </label>
-          <button onClick={handleImportFromUrl} title="Import from URL" className="p-2 text-gray-700 hover:bg-gray-100 rounded text-sm flex gap-1 items-center font-medium transition-colors">
+          <button onClick={handleImportFromUrl} title="Import from URL" className={`p-2 rounded text-sm flex gap-1 items-center font-medium transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-100'}`}>
             <LinkIcon size={18} />
           </button>
-          <button onClick={handleSave} title="Save" className="p-2 text-gray-700 hover:bg-gray-100 rounded text-sm flex gap-1 items-center font-medium transition-colors">
+          <button onClick={handleSave} title="Save" className={`p-2 rounded text-sm flex gap-1 items-center font-medium transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-100'}`}>
             <Save size={18} />
           </button>
-          <div className="h-6 w-px bg-gray-300 mx-1"></div>
+          <div className={`h-6 w-px mx-1 ${isDarkMode ? 'bg-slate-600' : 'bg-gray-300'}`}></div>
           <button 
             onClick={() => setMode('viewer')} 
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 shadow-sm font-medium transition-colors"
@@ -1016,21 +1044,21 @@ const App = () => {
 
       {/* Catalog Sidebar */}
       <div 
-        className={`absolute top-16 left-0 bottom-0 bg-white shadow-xl border-r border-gray-200 z-30 transition-all duration-300 ease-in-out flex flex-col ${isCatalogOpen ? 'w-80 translate-x-0' : 'w-80 -translate-x-full'}`}
+        className={`absolute top-16 left-0 bottom-0 shadow-xl border-r z-30 transition-all duration-300 ease-in-out flex flex-col ${isCatalogOpen ? 'w-80 translate-x-0' : 'w-80 -translate-x-full'} ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-200'}`}
       >
-        <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
-           <h3 className="font-bold text-gray-800 flex items-center gap-2">
+        <div className={`p-4 border-b flex justify-between items-center ${isDarkMode ? 'border-slate-700 bg-slate-900' : 'border-gray-100 bg-gray-50'}`}>
+           <h3 className={`font-bold flex items-center gap-2 ${isDarkMode ? 'text-slate-100' : 'text-gray-800'}`}>
              {activeFolder ? (
-               <button onClick={() => setActiveFolder(null)} className="hover:bg-gray-200 p-1 rounded"><ArrowLeft size={16}/></button>
-             ) : <Book size={18}/>}
+               <button onClick={() => setActiveFolder(null)} className={`p-1 rounded ${isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-gray-200'}`}><ArrowLeft size={16}/></button>
+             ) : <Book size={18}/>} 
              {activeFolder ? activeFolder.name : 'Catalog Folders'}
            </h3>
-           <button onClick={() => setIsCatalogOpen(false)}><X size={18} className="text-gray-400 hover:text-gray-600"/></button>
+           <button onClick={() => setIsCatalogOpen(false)}><X size={18} className={isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-gray-400 hover:text-gray-600'}/></button>
         </div>
         
         <div className="flex-1 overflow-y-auto p-4">
           {loadingCatalog ? (
-            <div className="flex flex-col items-center justify-center h-40 text-gray-500">
+            <div className={`flex flex-col items-center justify-center h-40 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
                <Loader2 className="animate-spin mb-2" />
                <span className="text-xs">Loading contents...</span>
             </div>
@@ -1043,16 +1071,16 @@ const App = () => {
                      <div 
                         key={folder.id} 
                         onClick={() => fetchFolderContents(folder)}
-                        className="p-3 rounded border border-gray-200 hover:border-blue-400 hover:bg-blue-50 cursor-pointer transition-colors flex items-center gap-3 group"
+                        className={`p-3 rounded border cursor-pointer transition-colors flex items-center gap-3 group ${isDarkMode ? 'border-slate-700 hover:border-blue-400 hover:bg-slate-800' : 'border-gray-200 hover:border-blue-400 hover:bg-blue-50'}`}
                       >
                         <div className="p-2 bg-blue-100 text-blue-600 rounded group-hover:bg-blue-200">
                            <Folder size={20} />
                         </div>
                         <div>
-                          <div className="font-semibold text-gray-800 text-sm">{folder.name}</div>
-                          <div className="text-xs text-gray-500 truncate max-w-[160px]">{folder.owner}/{folder.repo}</div>
+                          <div className={`font-semibold text-sm ${isDarkMode ? 'text-slate-100' : 'text-gray-800'}`}>{folder.name}</div>
+                          <div className={`text-xs truncate max-w-[160px] ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>{folder.owner}/{folder.repo}</div>
                         </div>
-                        <ChevronRight size={16} className="ml-auto text-gray-400 group-hover:text-blue-500"/>
+                        <ChevronRight size={16} className={`ml-auto group-hover:text-blue-500 ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}/>
                      </div>
                    ))}
                  </div>
@@ -1062,19 +1090,19 @@ const App = () => {
                {activeFolder && (
                  <div className="space-y-2">
                     {repoFiles.length === 0 ? (
-                      <div className="text-center text-gray-400 text-sm py-8 italic">No .json files found in this folder.</div>
+                      <div className={`text-center text-sm py-8 italic ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>No .json files found in this folder.</div>
                     ) : (
                       repoFiles.map(file => (
                         <div 
                           key={file.name}
                           onClick={() => loadCatalogFile(file)}
-                          className="p-3 rounded border border-gray-200 hover:border-green-400 hover:bg-green-50 cursor-pointer transition-colors flex items-center gap-3 group"
+                          className={`p-3 rounded border hover:border-green-400 cursor-pointer transition-colors flex items-center gap-3 group ${isDarkMode ? 'border-slate-700 hover:bg-slate-800' : 'border-gray-200 hover:bg-green-50'}`}
                         >
                           <div className="p-2 bg-green-100 text-green-600 rounded group-hover:bg-green-200">
                              <FileJson size={20} />
                           </div>
                           <div className="flex-1 min-w-0">
-                             <div className="font-semibold text-gray-800 text-sm truncate">{file.name}</div>
+                             <div className={`font-semibold text-sm truncate ${isDarkMode ? 'text-slate-100' : 'text-gray-800'}`}>{file.name}</div>
                           </div>
                         </div>
                       ))
@@ -1084,7 +1112,7 @@ const App = () => {
              </>
           )}
         </div>
-        <div className="p-3 bg-gray-50 border-t border-gray-200 text-[10px] text-gray-500 text-center">
+        <div className={`p-3 border-t text-[10px] text-center ${isDarkMode ? 'bg-slate-900 border-slate-700 text-slate-500' : 'bg-gray-50 border-gray-200 text-gray-500'}`}>
            Edit CATALOG_FOLDERS in index.tsx to add your own repos.
         </div>
       </div>
@@ -1092,7 +1120,7 @@ const App = () => {
       {/* Editor Body */}
       <div className="flex-1 flex overflow-hidden relative">
         {/* Canvas */}
-        <div className="flex-1 h-full bg-slate-50 relative">
+        <div className={`flex-1 h-full relative transition-colors ${isDarkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
           <ReactFlow<AppNode>
             nodes={nodes}
             edges={edges}
@@ -1107,9 +1135,9 @@ const App = () => {
             snapToGrid
             deleteKeyCode={['Backspace', 'Delete']}
           >
-            <Background color="#cbd5e1" gap={20} />
+            <Background color={isDarkMode ? '#334155' : '#cbd5e1'} gap={20} />
             <Controls />
-            <MiniMap className="bg-white border rounded shadow-lg" zoomable pannable />
+            <MiniMap className={isDarkMode ? 'bg-slate-800 border border-slate-600 rounded shadow-lg' : 'bg-white border rounded shadow-lg'} zoomable pannable />
           </ReactFlow>
         </div>
 
