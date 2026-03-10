@@ -479,11 +479,13 @@ const PropertiesPanel = ({ selectedNode, updateNode }: { selectedNode: AppNode |
 const Viewer = ({ 
   nodes, 
   edges, 
-  onExit 
+  onExit,
+  isDarkMode,
 }: { 
   nodes: AppNode[], 
   edges: Edge[], 
-  onExit: () => void 
+  onExit: () => void,
+  isDarkMode: boolean,
 }) => {
   const [history, setHistory] = useState<string[]>([]);
   const [currentNodeId, setCurrentNodeId] = useState<string>('start');
@@ -494,15 +496,12 @@ const Viewer = ({
   // Incoming nodes (parents) - Purely based on graph topology
   const prevNodes = useMemo(() => {
     const incomingEdgeIds = edges.filter(e => e.target === currentNodeId).map(e => e.source);
-    // Unique sources
     const uniqueSources = Array.from(new Set(incomingEdgeIds));
     return uniqueSources.map(id => nodes.find(n => n.id === id)).filter(Boolean) as AppNode[];
   }, [currentNodeId, edges, nodes]);
 
   // Outgoing nodes (children) - Purely based on graph topology
   const nextNodes = useMemo(() => {
-    // For radio/checkbox, we need to look at specific handles, but for "Next" preview, 
-    // we just show all possible distinct target nodes.
     const outgoingEdgeTargets = edges.filter(e => e.source === currentNodeId).map(e => e.target);
     const uniqueTargets = Array.from(new Set(outgoingEdgeTargets));
     return uniqueTargets.map(id => nodes.find(n => n.id === id)).filter(Boolean) as AppNode[];
@@ -515,7 +514,7 @@ const Viewer = ({
     setHistory(newHistory);
     if (prevId) {
       setCurrentNodeId(prevId);
-      setSelections([]); // Reset selections when going back
+      setSelections([]);
     }
   };
 
@@ -534,31 +533,20 @@ const Viewer = ({
     let nextEdge: Edge | undefined;
 
     if (currentNode.data.type === 'static') {
-      // Just take the first edge
       nextEdge = edges.find(e => e.source === currentNodeId);
     } else if (currentNode.data.type === 'radio') {
       const selectedOptionId = selections[0];
-      // Find edge connected to this source handle
       nextEdge = edges.find(e => e.source === currentNodeId && e.sourceHandle === selectedOptionId);
     } else if (currentNode.data.type === 'checkbox') {
-      // Match selections against paths
       const paths = currentNode.data.paths || [];
-      
+
       const sortedPaths = [...paths].sort((a, b) => {
         const lenDiff = b.requiredOptionIds.length - a.requiredOptionIds.length;
         if (lenDiff !== 0) return lenDiff;
         return a.label.localeCompare(b.label);
       });
 
-      const matchedPath = sortedPaths.find(path => {
-        // Only require logic: If I selected A and B, and path requires A, does it match?
-        // Usually Exact Match or Subset Match.
-        // Prompt said: "choose multiple ... and proceed to the node corresponding to combination"
-        // Let's assume strict subset requirement: All requirements must be in selections. 
-        // Note: If selections = [A, B] and Path1 req [A], Path2 req [A, B]. Sorted puts Path2 first.
-        // If selections = [A, C] and Path1 req [A]. It matches.
-        return path.requiredOptionIds.every(req => selections.includes(req));
-      });
+      const matchedPath = sortedPaths.find(path => path.requiredOptionIds.every(req => selections.includes(req)));
 
       if (matchedPath) {
         nextEdge = edges.find(e => e.source === currentNodeId && e.sourceHandle === matchedPath.id);
@@ -566,17 +554,16 @@ const Viewer = ({
     }
 
     if (nextEdge) {
-      // Ensure target node exists
       const targetNode = nodes.find(n => n.id === nextEdge!.target);
       if (targetNode) {
         setHistory([...history, currentNodeId]);
         setCurrentNodeId(nextEdge.target);
         setSelections([]);
       } else {
-        alert("Configuration Error: The next node is missing.");
+        alert('Configuration Error: The next node is missing.');
       }
     } else {
-      alert("No valid path defined for this selection.");
+      alert('No valid path defined for this selection.');
     }
   };
 
@@ -593,123 +580,131 @@ const Viewer = ({
   if (!currentNode) return <div>Node not found</div>;
 
   return (
-    <div className="fixed inset-0 bg-slate-50 z-50 flex flex-col">
-      {/* Header */}
-      <div className="h-16 bg-white border-b flex items-center px-6 justify-between shrink-0">
-        <h2 className="font-bold text-gray-800">Preview Mode</h2>
-        <button onClick={onExit} className="text-gray-600 hover:text-red-600 flex items-center gap-2">
+    <div className={`fixed inset-0 z-50 flex flex-col ${isDarkMode ? 'bg-slate-950' : 'bg-slate-50'}`}>
+      <div className={`h-16 border-b flex items-center px-6 justify-between shrink-0 ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white'}`}>
+        <h2 className={`font-bold ${isDarkMode ? 'text-slate-100' : 'text-gray-800'}`}>Preview Mode</h2>
+        <button onClick={onExit} className={`flex items-center gap-2 ${isDarkMode ? 'text-slate-300 hover:text-red-400' : 'text-gray-600 hover:text-red-600'}`}>
           <Flag size={18} /> Exit
         </button>
       </div>
 
-      {/* Main Wizard Layout */}
       <div className="flex-1 flex items-center justify-center p-8 overflow-hidden relative">
-        
-        {/* Connection Lines Layer (Conceptual) */}
         <div className="absolute inset-0 pointer-events-none opacity-20 flex items-center justify-center">
-            {prevNodes.length > 0 && <div className="w-[300px] h-[2px] bg-slate-400 absolute left-[25%]"></div>}
-            {nextNodes.length > 0 && <div className="w-[300px] h-[2px] bg-slate-400 absolute right-[25%]"></div>}
+          {prevNodes.length > 0 && <div className={`w-[300px] h-[2px] absolute left-[25%] ${isDarkMode ? 'bg-slate-600' : 'bg-slate-400'}`}></div>}
+          {nextNodes.length > 0 && <div className={`w-[300px] h-[2px] absolute right-[25%] ${isDarkMode ? 'bg-slate-600' : 'bg-slate-400'}`}></div>}
         </div>
 
         <div className="w-full max-w-[90vw] grid grid-cols-3 gap-48 items-center h-full relative z-10">
-          
-          {/* LEFT COLUMN: Past */}
           <div className="flex flex-col items-end justify-center gap-4 opacity-80 transition-all duration-500">
-             {prevNodes.length === 0 && <div className="text-sm text-gray-500 font-medium">Start of flow</div>}
-             {prevNodes.map(node => (
-               <div key={node.id} className="bg-white p-4 rounded-lg border border-gray-300 w-64 text-right shadow-sm">
-                 <div className="text-xs uppercase font-bold text-gray-600 mb-1">{node.data.label}</div>
-                 <div className="text-sm text-gray-900 line-clamp-2">{node.data.content}</div>
-               </div>
-             ))}
+            {prevNodes.length === 0 && <div className={`text-sm font-medium ${isDarkMode ? 'text-slate-500' : 'text-gray-500'}`}>Start of flow</div>}
+            {prevNodes.map(node => (
+              <div key={node.id} className={`p-4 rounded-lg border w-64 text-right shadow-sm ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-300'}`}>
+                <div className={`text-xs uppercase font-bold mb-1 ${isDarkMode ? 'text-slate-400' : 'text-gray-600'}`}>{node.data.label}</div>
+                <div className={`text-sm line-clamp-2 ${isDarkMode ? 'text-slate-100' : 'text-gray-900'}`}>{node.data.content}</div>
+              </div>
+            ))}
           </div>
 
-          {/* CENTER COLUMN: Present (Active) */}
           <div className="flex flex-col items-center justify-center z-20">
-             <div className="w-[450px] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col transition-all duration-500 transform scale-100">
-                <div className={`h-2 w-full ${NODE_TYPES_CONFIG[currentNode.data.type].color.split(' ')[0].replace('bg-', 'bg-')}`} />
-                <div className="p-8">
-                  <div className="flex items-center gap-2 mb-4 text-gray-500 text-sm font-bold uppercase tracking-wider">
-                     {NODE_TYPES_CONFIG[currentNode.data.type].label}
-                  </div>
-                  
-                  <h1 className="text-2xl font-bold text-gray-900 mb-6 leading-relaxed">
-                    {currentNode.data.content}
-                  </h1>
+            <div className={`w-[450px] rounded-xl shadow-2xl border overflow-hidden flex flex-col transition-all duration-500 transform scale-100 ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-200'}`}>
+              <div className={`h-2 w-full ${NODE_TYPES_CONFIG[currentNode.data.type].color.split(' ')[0].replace('bg-', 'bg-')}`} />
+              <div className="p-8">
+                <div className={`flex items-center gap-2 mb-4 text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                  {NODE_TYPES_CONFIG[currentNode.data.type].label}
+                </div>
 
-                  {/* Inputs */}
-                  {(currentNode.data.type === 'radio' || currentNode.data.type === 'checkbox') && (
-                    <div className="space-y-3 mb-8">
-                       {currentNode.data.options?.map(opt => {
-                         const isSelected = selections.includes(opt.id);
-                         return (
-                           <div 
-                              key={opt.id}
-                              onClick={() => toggleSelection(opt.id, currentNode.data.type === 'radio')}
-                              className={`
-                                p-4 rounded-lg border-2 cursor-pointer transition-all flex items-center gap-3
-                                ${isSelected ? 'border-blue-500 bg-blue-50 text-blue-900' : 'border-gray-200 hover:border-gray-300 text-gray-800'}
-                              `}
-                           >
-                             <div className={`
-                               w-5 h-5 rounded-full border-2 flex items-center justify-center
-                               ${currentNode.data.type === 'checkbox' ? 'rounded-md' : 'rounded-full'}
-                               ${isSelected ? 'border-blue-500 bg-blue-500' : 'border-gray-300'}
-                             `}>
-                               {isSelected && <Check size={12} className="text-white" />}
-                             </div>
-                             <span className="font-medium">{opt.label}</span>
-                           </div>
-                         );
-                       })}
-                    </div>
+                <h1 className={`text-2xl font-bold mb-6 leading-relaxed ${isDarkMode ? 'text-slate-100' : 'text-gray-900'}`}>
+                  {currentNode.data.content}
+                </h1>
+
+                {currentNode.data.type === 'radio' && (
+                  <div className="space-y-3 mb-8">
+                    {currentNode.data.options?.map(opt => (
+                      <button
+                        key={opt.id}
+                        onClick={() => toggleSelection(opt.id, true)}
+                        className={`w-full text-left p-3 rounded-lg border-2 transition-all ${
+                          selections.includes(opt.id)
+                            ? 'border-blue-500 bg-blue-500/10 text-blue-300'
+                            : isDarkMode
+                              ? 'border-slate-700 bg-slate-800 text-slate-200 hover:border-slate-500'
+                              : 'border-gray-200 hover:border-blue-400 hover:bg-blue-50 text-gray-800'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {currentNode.data.type === 'checkbox' && (
+                  <div className="space-y-3 mb-8">
+                    {currentNode.data.options?.map(opt => (
+                      <button
+                        key={opt.id}
+                        onClick={() => toggleSelection(opt.id, false)}
+                        className={`w-full text-left p-3 rounded-lg border-2 transition-all ${
+                          selections.includes(opt.id)
+                            ? 'border-purple-500 bg-purple-500/10 text-purple-300'
+                            : isDarkMode
+                              ? 'border-slate-700 bg-slate-800 text-slate-200 hover:border-slate-500'
+                              : 'border-gray-200 hover:border-purple-400 hover:bg-purple-50 text-gray-800'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {currentNode.data.type === 'end' && (
+                  <div className={`mb-8 p-4 rounded-lg border ${isDarkMode ? 'bg-green-950/20 border-green-900/50 text-green-300' : 'bg-green-50 border-green-200 text-green-800'}`}>
+                    <Check size={18} className="inline mr-2" /> End of flow reached
+                  </div>
+                )}
+
+                <div className="flex gap-3 mt-4">
+                  {history.length > 0 && (
+                    <button
+                      onClick={handleBack}
+                      className={`flex-1 py-3 px-4 rounded-lg border-2 font-bold flex items-center justify-center gap-2 ${isDarkMode ? 'border-slate-600 text-slate-100 hover:bg-slate-800' : 'border-gray-300 text-gray-800 hover:bg-gray-100'}`}
+                    >
+                      <ArrowLeft size={18} /> Back
+                    </button>
                   )}
 
-                  {/* Actions */}
-                  <div className="flex gap-4 pt-4 border-t border-gray-100 mt-auto">
-                     {history.length > 0 && (
-                       <button 
-                         onClick={handleBack}
-                         className="flex-1 py-3 px-4 rounded-lg border-2 border-gray-300 font-bold text-gray-800 hover:bg-gray-100 flex items-center justify-center gap-2"
-                       >
-                         <ArrowLeft size={18} /> Back
-                       </button>
-                     )}
-                     
-                     {currentNode.data.type !== 'end' ? (
-                       <button 
-                         onClick={handleContinue}
-                         disabled={currentNode.data.type !== 'static' && selections.length === 0}
-                         className="flex-[2] py-3 px-4 rounded-lg bg-blue-600 font-semibold text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                       >
-                         Continue <ChevronRight size={18} />
-                       </button>
-                     ) : (
-                       currentNode.data.canRestart && (
-                         <button 
-                          onClick={handleContinue}
-                          className="flex-[2] py-3 px-4 rounded-lg bg-green-600 font-semibold text-white hover:bg-green-700 flex items-center justify-center gap-2"
-                         >
-                           <RotateCcw size={18} /> Restart
-                         </button>
-                       )
-                     )}
-                  </div>
+                  {currentNode.data.type !== 'end' ? (
+                    <button
+                      onClick={handleContinue}
+                      disabled={currentNode.data.type !== 'static' && selections.length === 0}
+                      className="flex-[2] py-3 px-4 rounded-lg bg-blue-600 font-semibold text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      Continue <ChevronRight size={18} />
+                    </button>
+                  ) : (
+                    currentNode.data.canRestart && (
+                      <button
+                        onClick={handleContinue}
+                        className="flex-[2] py-3 px-4 rounded-lg bg-green-600 font-semibold text-white hover:bg-green-700 flex items-center justify-center gap-2"
+                      >
+                        <RotateCcw size={18} /> Restart
+                      </button>
+                    )
+                  )}
                 </div>
-             </div>
+              </div>
+            </div>
           </div>
 
-          {/* RIGHT COLUMN: Future (Preview) */}
           <div className="flex flex-col items-start justify-center gap-4 opacity-80 transition-all duration-500">
-            {nextNodes.length === 0 && currentNode.data.type !== 'end' && <div className="text-sm text-gray-500 font-medium">End of path</div>}
+            {nextNodes.length === 0 && currentNode.data.type !== 'end' && <div className={`text-sm font-medium ${isDarkMode ? 'text-slate-500' : 'text-gray-500'}`}>End of path</div>}
             {nextNodes.map(node => (
-               <div key={node.id} className="bg-white p-4 rounded-lg border border-gray-300 w-64 shadow-sm">
-                 <div className="text-xs uppercase font-bold text-gray-600 mb-1">{node.data.label}</div>
-                 <div className="text-sm text-gray-900 line-clamp-2">{node.data.content}</div>
-               </div>
-             ))}
+              <div key={node.id} className={`p-4 rounded-lg border w-64 shadow-sm ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-300'}`}>
+                <div className={`text-xs uppercase font-bold mb-1 ${isDarkMode ? 'text-slate-400' : 'text-gray-600'}`}>{node.data.label}</div>
+                <div className={`text-sm line-clamp-2 ${isDarkMode ? 'text-slate-100' : 'text-gray-900'}`}>{node.data.content}</div>
+              </div>
+            ))}
           </div>
-
         </div>
       </div>
     </div>
@@ -1234,7 +1229,7 @@ const App = () => {
 
       {/* Viewer Overlay */}
       {mode === 'viewer' && (
-        <Viewer nodes={nodes} edges={edges} onExit={() => setMode('editor')} />
+        <Viewer nodes={nodes} edges={edges} onExit={() => setMode('editor')} isDarkMode={isDarkMode} />
       )}
     </div>
   );
