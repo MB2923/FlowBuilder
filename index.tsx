@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, createContext, useContext } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   ReactFlow,
@@ -110,6 +110,8 @@ interface NodeData {
 
 type AppNode = Node<NodeData>;
 
+const ThemeModeContext = createContext(false);
+
 interface FlowData {
   nodes: AppNode[];
   edges: Edge[];
@@ -201,40 +203,49 @@ const isFlowData = (value: unknown): value is FlowData => {
 
 const NodeHeader = ({ type, label }: { type: NodeType; label: string }) => {
   const Icon = NODE_TYPES_CONFIG[type].icon;
+  const isDarkMode = useContext(ThemeModeContext);
   return (
-    <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-200/50">
-      <Icon size={14} className="text-gray-600" />
-      <span className="text-xs font-bold uppercase text-gray-700 tracking-wider">{label}</span>
+    <div className={`flex items-center gap-2 mb-2 pb-2 border-b ${isDarkMode ? 'border-slate-700/80' : 'border-gray-200/50'}`}>
+      <Icon size={14} className={isDarkMode ? 'text-slate-300' : 'text-gray-600'} />
+      <span className={`text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-200' : 'text-gray-700'}`}>{label}</span>
     </div>
   );
 };
 
-const StaticNodeComponent = ({ data, id }: { data: NodeData; id: string }) => (
-  <div className="p-4 rounded-lg w-[280px] text-sm h-full">
+const StaticNodeComponent = ({ data, id }: { data: NodeData; id: string }) => {
+  const isDarkMode = useContext(ThemeModeContext);
+  return (
+  <div className={`p-4 rounded-lg w-[280px] text-sm h-full ${isDarkMode ? 'bg-slate-900 border border-slate-700' : ''}`}>
     {id !== 'start' && <Handle type="target" position={Position.Left} className="!bg-gray-400" />}
     <NodeHeader type="static" label={data.label} />
-    <p className="text-gray-800 line-clamp-3">{data.content}</p>
+    <p className={isDarkMode ? 'text-slate-100 line-clamp-3' : 'text-gray-800 line-clamp-3'}>{data.content}</p>
     <Handle type="source" position={Position.Right} className="!bg-blue-500" />
   </div>
-);
+  );
+};
 
-const EndNodeComponent = ({ data }: { data: NodeData }) => (
-  <div className="p-4 rounded-lg w-[280px] text-sm h-full bg-red-50/50">
+const EndNodeComponent = ({ data }: { data: NodeData }) => {
+  const isDarkMode = useContext(ThemeModeContext);
+  return (
+  <div className={`p-4 rounded-lg w-[280px] text-sm h-full ${isDarkMode ? 'bg-red-950/20 border border-red-900/40' : 'bg-red-50/50'}`}>
     <Handle type="target" position={Position.Left} className="!bg-gray-400" />
     <NodeHeader type="end" label={data.label} />
-    <p className="text-gray-800 mb-2">{data.content}</p>
-    {data.canRestart && <div className="text-xs text-blue-700 font-medium">↺ Can Restart</div>}
+    <p className={isDarkMode ? 'text-slate-100 mb-2' : 'text-gray-800 mb-2'}>{data.content}</p>
+    {data.canRestart && <div className={isDarkMode ? 'text-xs text-blue-300 font-medium' : 'text-xs text-blue-700 font-medium'}>↺ Can Restart</div>}
   </div>
-);
+  );
+};
 
-const RadioNodeComponent = ({ data }: { data: NodeData }) => (
-  <div className="p-4 rounded-lg w-[300px] text-sm relative h-full bg-blue-50/50">
+const RadioNodeComponent = ({ data }: { data: NodeData }) => {
+  const isDarkMode = useContext(ThemeModeContext);
+  return (
+  <div className={`p-4 rounded-lg w-[300px] text-sm relative h-full ${isDarkMode ? 'bg-blue-950/20 border border-blue-900/40' : 'bg-blue-50/50'}`}>
     <Handle type="target" position={Position.Left} className="!bg-gray-400" />
     <NodeHeader type="radio" label={data.label} />
-    <p className="text-gray-800 mb-3 italic">{data.content}</p>
+    <p className={isDarkMode ? 'text-slate-100 mb-3 italic' : 'text-gray-800 mb-3 italic'}>{data.content}</p>
     <div className="space-y-2">
       {data.options?.map((opt, idx) => (
-        <div key={opt.id} className="relative flex items-center justify-between bg-white p-2 rounded border border-blue-100 text-gray-800">
+        <div key={opt.id} className={`relative flex items-center justify-between p-2 rounded ${isDarkMode ? 'bg-slate-900 border border-blue-900/50 text-slate-100' : 'bg-white border border-blue-100 text-gray-800'}`}>
           <span>{opt.label}</span>
           <Handle
             type="source"
@@ -248,28 +259,31 @@ const RadioNodeComponent = ({ data }: { data: NodeData }) => (
       {(!data.options || data.options.length === 0) && <div className="text-red-600 text-xs font-medium">No options defined</div>}
     </div>
   </div>
-);
+  );
+};
 
-const CheckboxNodeComponent = ({ data }: { data: NodeData }) => (
-  <div className="p-4 rounded-lg w-[320px] text-sm h-full bg-purple-50/50">
+const CheckboxNodeComponent = ({ data }: { data: NodeData }) => {
+  const isDarkMode = useContext(ThemeModeContext);
+  return (
+  <div className={`p-4 rounded-lg w-[320px] text-sm h-full ${isDarkMode ? 'bg-purple-950/20 border border-purple-900/40' : 'bg-purple-50/50'}`}>
     <Handle type="target" position={Position.Left} className="!bg-gray-400" />
     <NodeHeader type="checkbox" label={data.label} />
-    <p className="text-gray-800 mb-3 italic">{data.content}</p>
+    <p className={isDarkMode ? 'text-slate-100 mb-3 italic' : 'text-gray-800 mb-3 italic'}>{data.content}</p>
     
-    <div className="mb-2 text-xs font-bold text-purple-900">Available Options:</div>
+    <div className={isDarkMode ? 'mb-2 text-xs font-bold text-purple-200' : 'mb-2 text-xs font-bold text-purple-900'}>Available Options:</div>
     <div className="flex flex-wrap gap-1 mb-4">
       {data.options?.map(opt => (
-        <span key={opt.id} className="bg-white px-2 py-1 rounded border border-purple-100 text-xs text-gray-800">{opt.label}</span>
+        <span key={opt.id} className={`px-2 py-1 rounded text-xs ${isDarkMode ? 'bg-slate-900 border border-purple-900/50 text-slate-100' : 'bg-white border border-purple-100 text-gray-800'}`}>{opt.label}</span>
       ))}
     </div>
 
-    <div className="mb-2 text-xs font-bold text-purple-900">Logic Paths (Outputs):</div>
+    <div className={isDarkMode ? 'mb-2 text-xs font-bold text-purple-200' : 'mb-2 text-xs font-bold text-purple-900'}>Logic Paths (Outputs):</div>
     <div className="space-y-2">
       {data.paths?.map((path) => (
-        <div key={path.id} className="relative flex items-center justify-between bg-white p-2 rounded border border-purple-100 text-gray-800">
+        <div key={path.id} className={`relative flex items-center justify-between p-2 rounded ${isDarkMode ? 'bg-slate-900 border border-purple-900/50 text-slate-100' : 'bg-white border border-purple-100 text-gray-800'}`}>
           <div className="flex flex-col">
              <span className="font-medium">{path.label}</span>
-             <span className="text-xs text-gray-600 mt-0.5">
+             <span className={isDarkMode ? 'text-xs text-slate-400 mt-0.5' : 'text-xs text-gray-600 mt-0.5'}>
                Requires: {path.requiredOptionIds.length > 0 
                   ? path.requiredOptionIds.map(id => data.options?.find(o => o.id === id)?.label || '???').join(' + ') 
                   : '(Any/Else)'}
@@ -286,7 +300,8 @@ const CheckboxNodeComponent = ({ data }: { data: NodeData }) => (
       ))}
     </div>
   </div>
-);
+  );
+};
 
 const nodeTypes = {
   radio: RadioNodeComponent,
@@ -738,6 +753,12 @@ const App = () => {
   const [mode, setMode] = useState<FlowMode>('editor');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const edgeColor = isDarkMode ? '#94a3b8' : '#475569';
+  const defaultEdgeOptions = useMemo(() => ({
+    animated: false,
+    style: { stroke: edgeColor, strokeWidth: 2 },
+    markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor },
+  }), [edgeColor]);
 
   // Modal State
   const [showUrlModal, setShowUrlModal] = useState(false);
@@ -782,6 +803,16 @@ const App = () => {
   }, [isDarkMode]);
 
   useEffect(() => {
+    setEdges((eds) =>
+      eds.map((edge) => ({
+        ...edge,
+        style: { ...(edge.style || {}), stroke: edgeColor, strokeWidth: 2 },
+        markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor },
+      })),
+    );
+  }, [edgeColor, setEdges]);
+
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       // Allow default behavior for inputs
       if (
@@ -806,8 +837,12 @@ const App = () => {
   const selectedNode = useMemo(() => nodes.find(n => n.id === selectedNodeId) || null, [nodes, selectedNodeId]);
 
   const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => addEdge({ ...params, markerEnd: { type: MarkerType.ArrowClosed } }, eds)),
-    [setEdges],
+    (params: Connection) => setEdges((eds) => addEdge({
+      ...params,
+      style: { stroke: edgeColor, strokeWidth: 2 },
+      markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor },
+    }, eds)),
+    [edgeColor, setEdges],
   );
 
   const onDragOver = useCallback((event: React.DragEvent) => {
@@ -1121,6 +1156,7 @@ const App = () => {
       <div className="flex-1 flex overflow-hidden relative">
         {/* Canvas */}
         <div className={`flex-1 h-full relative transition-colors ${isDarkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
+          <ThemeModeContext.Provider value={isDarkMode}>
           <ReactFlow<AppNode>
             nodes={nodes}
             edges={edges}
@@ -1131,6 +1167,8 @@ const App = () => {
             onDragOver={onDragOver}
             onPaneClick={() => setSelectedNodeId(null)}
             nodeTypes={nodeTypes}
+            colorMode={isDarkMode ? 'dark' : 'light'}
+            defaultEdgeOptions={defaultEdgeOptions}
             fitView
             snapToGrid
             deleteKeyCode={['Backspace', 'Delete']}
@@ -1139,6 +1177,7 @@ const App = () => {
             <Controls />
             <MiniMap className={isDarkMode ? 'bg-slate-800 border border-slate-600 rounded shadow-lg' : 'bg-white border rounded shadow-lg'} zoomable pannable />
           </ReactFlow>
+          </ThemeModeContext.Provider>
         </div>
 
         {/* Properties Panel */}
