@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, createContext, useContext } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   ReactFlow,
@@ -110,6 +110,8 @@ interface NodeData {
 
 type AppNode = Node<NodeData>;
 
+const ThemeModeContext = createContext(false);
+
 interface FlowData {
   nodes: AppNode[];
   edges: Edge[];
@@ -201,40 +203,49 @@ const isFlowData = (value: unknown): value is FlowData => {
 
 const NodeHeader = ({ type, label }: { type: NodeType; label: string }) => {
   const Icon = NODE_TYPES_CONFIG[type].icon;
+  const isDarkMode = useContext(ThemeModeContext);
   return (
-    <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-200/50">
-      <Icon size={14} className="text-gray-600" />
-      <span className="text-xs font-bold uppercase text-gray-700 tracking-wider">{label}</span>
+    <div className={`flex items-center gap-2 mb-2 pb-2 border-b ${isDarkMode ? 'border-slate-700/80' : 'border-gray-200/50'}`}>
+      <Icon size={14} className={isDarkMode ? 'text-slate-300' : 'text-gray-600'} />
+      <span className={`text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-200' : 'text-gray-700'}`}>{label}</span>
     </div>
   );
 };
 
-const StaticNodeComponent = ({ data, id }: { data: NodeData; id: string }) => (
-  <div className="p-4 rounded-lg w-[280px] text-sm h-full">
+const StaticNodeComponent = ({ data, id }: { data: NodeData; id: string }) => {
+  const isDarkMode = useContext(ThemeModeContext);
+  return (
+  <div className={`p-4 rounded-lg w-[280px] text-sm h-full ${isDarkMode ? 'bg-slate-900 border border-slate-700' : ''}`}>
     {id !== 'start' && <Handle type="target" position={Position.Left} className="!bg-gray-400" />}
     <NodeHeader type="static" label={data.label} />
-    <p className="text-gray-800 line-clamp-3">{data.content}</p>
+    <p className={isDarkMode ? 'text-slate-100 line-clamp-3' : 'text-gray-800 line-clamp-3'}>{data.content}</p>
     <Handle type="source" position={Position.Right} className="!bg-blue-500" />
   </div>
-);
+  );
+};
 
-const EndNodeComponent = ({ data }: { data: NodeData }) => (
-  <div className="p-4 rounded-lg w-[280px] text-sm h-full bg-red-50/50">
+const EndNodeComponent = ({ data }: { data: NodeData }) => {
+  const isDarkMode = useContext(ThemeModeContext);
+  return (
+  <div className={`p-4 rounded-lg w-[280px] text-sm h-full ${isDarkMode ? 'bg-red-950/20 border border-red-900/40' : 'bg-red-50/50'}`}>
     <Handle type="target" position={Position.Left} className="!bg-gray-400" />
     <NodeHeader type="end" label={data.label} />
-    <p className="text-gray-800 mb-2">{data.content}</p>
-    {data.canRestart && <div className="text-xs text-blue-700 font-medium">↺ Can Restart</div>}
+    <p className={isDarkMode ? 'text-slate-100 mb-2' : 'text-gray-800 mb-2'}>{data.content}</p>
+    {data.canRestart && <div className={isDarkMode ? 'text-xs text-blue-300 font-medium' : 'text-xs text-blue-700 font-medium'}>↺ Can Restart</div>}
   </div>
-);
+  );
+};
 
-const RadioNodeComponent = ({ data }: { data: NodeData }) => (
-  <div className="p-4 rounded-lg w-[300px] text-sm relative h-full bg-blue-50/50">
+const RadioNodeComponent = ({ data }: { data: NodeData }) => {
+  const isDarkMode = useContext(ThemeModeContext);
+  return (
+  <div className={`p-4 rounded-lg w-[300px] text-sm relative h-full ${isDarkMode ? 'bg-blue-950/20 border border-blue-900/40' : 'bg-blue-50/50'}`}>
     <Handle type="target" position={Position.Left} className="!bg-gray-400" />
     <NodeHeader type="radio" label={data.label} />
-    <p className="text-gray-800 mb-3 italic">{data.content}</p>
+    <p className={isDarkMode ? 'text-slate-100 mb-3 italic' : 'text-gray-800 mb-3 italic'}>{data.content}</p>
     <div className="space-y-2">
       {data.options?.map((opt, idx) => (
-        <div key={opt.id} className="relative flex items-center justify-between bg-white p-2 rounded border border-blue-100 text-gray-800">
+        <div key={opt.id} className={`relative flex items-center justify-between p-2 rounded ${isDarkMode ? 'bg-slate-900 border border-blue-900/50 text-slate-100' : 'bg-white border border-blue-100 text-gray-800'}`}>
           <span>{opt.label}</span>
           <Handle
             type="source"
@@ -248,28 +259,31 @@ const RadioNodeComponent = ({ data }: { data: NodeData }) => (
       {(!data.options || data.options.length === 0) && <div className="text-red-600 text-xs font-medium">No options defined</div>}
     </div>
   </div>
-);
+  );
+};
 
-const CheckboxNodeComponent = ({ data }: { data: NodeData }) => (
-  <div className="p-4 rounded-lg w-[320px] text-sm h-full bg-purple-50/50">
+const CheckboxNodeComponent = ({ data }: { data: NodeData }) => {
+  const isDarkMode = useContext(ThemeModeContext);
+  return (
+  <div className={`p-4 rounded-lg w-[320px] text-sm h-full ${isDarkMode ? 'bg-purple-950/20 border border-purple-900/40' : 'bg-purple-50/50'}`}>
     <Handle type="target" position={Position.Left} className="!bg-gray-400" />
     <NodeHeader type="checkbox" label={data.label} />
-    <p className="text-gray-800 mb-3 italic">{data.content}</p>
+    <p className={isDarkMode ? 'text-slate-100 mb-3 italic' : 'text-gray-800 mb-3 italic'}>{data.content}</p>
     
-    <div className="mb-2 text-xs font-bold text-purple-900">Available Options:</div>
+    <div className={isDarkMode ? 'mb-2 text-xs font-bold text-purple-200' : 'mb-2 text-xs font-bold text-purple-900'}>Available Options:</div>
     <div className="flex flex-wrap gap-1 mb-4">
       {data.options?.map(opt => (
-        <span key={opt.id} className="bg-white px-2 py-1 rounded border border-purple-100 text-xs text-gray-800">{opt.label}</span>
+        <span key={opt.id} className={`px-2 py-1 rounded text-xs ${isDarkMode ? 'bg-slate-900 border border-purple-900/50 text-slate-100' : 'bg-white border border-purple-100 text-gray-800'}`}>{opt.label}</span>
       ))}
     </div>
 
-    <div className="mb-2 text-xs font-bold text-purple-900">Logic Paths (Outputs):</div>
+    <div className={isDarkMode ? 'mb-2 text-xs font-bold text-purple-200' : 'mb-2 text-xs font-bold text-purple-900'}>Logic Paths (Outputs):</div>
     <div className="space-y-2">
       {data.paths?.map((path) => (
-        <div key={path.id} className="relative flex items-center justify-between bg-white p-2 rounded border border-purple-100 text-gray-800">
+        <div key={path.id} className={`relative flex items-center justify-between p-2 rounded ${isDarkMode ? 'bg-slate-900 border border-purple-900/50 text-slate-100' : 'bg-white border border-purple-100 text-gray-800'}`}>
           <div className="flex flex-col">
              <span className="font-medium">{path.label}</span>
-             <span className="text-xs text-gray-600 mt-0.5">
+             <span className={isDarkMode ? 'text-xs text-slate-400 mt-0.5' : 'text-xs text-gray-600 mt-0.5'}>
                Requires: {path.requiredOptionIds.length > 0 
                   ? path.requiredOptionIds.map(id => data.options?.find(o => o.id === id)?.label || '???').join(' + ') 
                   : '(Any/Else)'}
@@ -286,7 +300,8 @@ const CheckboxNodeComponent = ({ data }: { data: NodeData }) => (
       ))}
     </div>
   </div>
-);
+  );
+};
 
 const nodeTypes = {
   radio: RadioNodeComponent,
@@ -298,8 +313,9 @@ const nodeTypes = {
 // --- Property Panel (Editor) ---
 
 const PropertiesPanel = ({ selectedNode, updateNode }: { selectedNode: AppNode | null, updateNode: (id: string, data: Partial<NodeData>) => void }) => {
+  const isDarkMode = useContext(ThemeModeContext);
   if (!selectedNode) return (
-    <div className="w-80 border-l border-gray-200 bg-gray-100 p-4 text-gray-500 flex flex-col items-center justify-center text-center">
+    <div className={`w-80 border-l p-4 flex flex-col items-center justify-center text-center ${isDarkMode ? 'border-slate-700 bg-slate-900 text-slate-400' : 'border-gray-200 bg-gray-100 text-gray-500'}`}>
       <Settings size={48} className="mb-4 opacity-30" />
       <p>Select a node to edit properties</p>
     </div>
@@ -340,25 +356,25 @@ const PropertiesPanel = ({ selectedNode, updateNode }: { selectedNode: AppNode |
   };
 
   return (
-    <div className="w-80 border-l border-gray-200 bg-gray-100 flex flex-col h-full overflow-hidden">
-      <div className="p-4 border-b bg-gray-300 font-semibold text-gray-800 flex justify-between items-center">
+    <div className={`w-80 border-l flex flex-col h-full overflow-hidden ${isDarkMode ? 'border-slate-700 bg-slate-900' : 'border-gray-200 bg-gray-100'}`}>
+      <div className={`p-4 border-b font-semibold flex justify-between items-center ${isDarkMode ? 'border-slate-700 bg-slate-800 text-slate-100' : 'bg-gray-300 text-gray-800'}`}>
         <span>Edit Node</span>
-        <span className="text-xs px-2 py-1 bg-white/60 text-gray-700 rounded uppercase">{data.type}</span>
+        <span className={`text-xs px-2 py-1 rounded uppercase ${isDarkMode ? 'bg-slate-700 text-slate-200' : 'bg-white/60 text-gray-700'}`}>{data.type}</span>
       </div>
       
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
         {/* Basic Info */}
         <div className="space-y-3">
-          <label className="block text-sm font-bold text-gray-800">Label (Internal)</label>
+          <label className={`block text-sm font-bold ${isDarkMode ? 'text-slate-100' : 'text-gray-800'}`}>Label (Internal)</label>
           <input 
-            className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 bg-white" 
+            className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none ${isDarkMode ? 'text-slate-100 bg-slate-800 border-slate-600' : 'text-gray-900 bg-white border-gray-300'}`} 
             value={data.label} 
             onChange={(e) => updateNode(id, { label: e.target.value })}
           />
           
-          <label className="block text-sm font-bold text-gray-800">Content / Question</label>
+          <label className={`block text-sm font-bold ${isDarkMode ? 'text-slate-100' : 'text-gray-800'}`}>Content / Question</label>
           <textarea 
-            className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none min-h-[100px] text-gray-900 bg-white" 
+            className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none min-h-[100px] ${isDarkMode ? 'text-slate-100 bg-slate-800 border-slate-600' : 'text-gray-900 bg-white border-gray-300'}`} 
             value={data.content} 
             onChange={(e) => updateNode(id, { content: e.target.value })}
           />
@@ -368,8 +384,8 @@ const PropertiesPanel = ({ selectedNode, updateNode }: { selectedNode: AppNode |
         {(data.type === 'radio' || data.type === 'checkbox') && (
           <div className="space-y-3">
             <div className="flex justify-between items-center">
-              <label className="text-sm font-bold text-gray-800">Options</label>
-              <button onClick={addOption} className="text-xs flex items-center gap-1 text-blue-700 hover:text-blue-900 font-semibold">
+              <label className={`text-sm font-bold ${isDarkMode ? 'text-slate-100' : 'text-gray-800'}`}>Options</label>
+              <button onClick={addOption} className={`text-xs flex items-center gap-1 font-semibold ${isDarkMode ? 'text-blue-300 hover:text-blue-200' : 'text-blue-700 hover:text-blue-900'}`}>
                 <Plus size={12} /> Add
               </button>
             </div>
@@ -377,7 +393,7 @@ const PropertiesPanel = ({ selectedNode, updateNode }: { selectedNode: AppNode |
               {data.options?.map(opt => (
                 <div key={opt.id} className="flex gap-2">
                   <input 
-                    className="flex-1 p-1.5 text-sm border rounded text-gray-900 bg-white"
+                    className={`flex-1 p-1.5 text-sm border rounded ${isDarkMode ? 'text-slate-100 bg-slate-800 border-slate-600' : 'text-gray-900 bg-white border-gray-300'}`}
                     value={opt.label}
                     onChange={(e) => updateOption(opt.id, e.target.value)}
                   />
@@ -392,20 +408,20 @@ const PropertiesPanel = ({ selectedNode, updateNode }: { selectedNode: AppNode |
 
         {/* Checkbox Paths */}
         {data.type === 'checkbox' && (
-          <div className="space-y-3 border-t border-gray-300 pt-4">
+          <div className={`space-y-3 border-t pt-4 ${isDarkMode ? 'border-slate-700' : 'border-gray-300'}`}>
              <div className="flex justify-between items-center">
-              <label className="text-sm font-bold text-gray-800">Output Paths</label>
-              <button onClick={addPath} className="text-xs flex items-center gap-1 text-purple-700 hover:text-purple-900 font-semibold">
+              <label className={`text-sm font-bold ${isDarkMode ? 'text-slate-100' : 'text-gray-800'}`}>Output Paths</label>
+              <button onClick={addPath} className={`text-xs flex items-center gap-1 font-semibold ${isDarkMode ? 'text-purple-300 hover:text-purple-200' : 'text-purple-700 hover:text-purple-900'}`}>
                 <Plus size={12} /> Add Path
               </button>
             </div>
-            <p className="text-xs text-gray-600">Define which combination of selected options leads to which path. The system checks specific matches first.</p>
+            <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-600'}`}>Define which combination of selected options leads to which path. The system checks specific matches first.</p>
             <div className="space-y-4">
               {data.paths?.map(path => (
-                <div key={path.id} className="bg-white p-3 rounded border border-gray-200">
+                <div key={path.id} className={`p-3 rounded border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'}`}>
                   <div className="flex justify-between mb-2">
                      <input 
-                        className="flex-1 p-1 text-xs border rounded bg-gray-50 font-medium text-gray-900"
+                        className={`flex-1 p-1 text-xs border rounded font-medium ${isDarkMode ? 'bg-slate-700 border-slate-600 text-slate-100' : 'bg-gray-50 border-gray-300 text-gray-900'}`}
                         value={path.label}
                         onChange={(e) => updatePath(path.id, { label: e.target.value })}
                         placeholder="Path Name"
@@ -415,9 +431,9 @@ const PropertiesPanel = ({ selectedNode, updateNode }: { selectedNode: AppNode |
                       </button>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-[10px] uppercase text-gray-500 font-bold">Requires (AND)</p>
+                    <p className={`text-[10px] uppercase font-bold ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>Requires (AND)</p>
                     {data.options?.map(opt => (
-                      <label key={opt.id} className="flex items-center gap-2 text-xs text-gray-800">
+                      <label key={opt.id} className={`flex items-center gap-2 text-xs ${isDarkMode ? 'text-slate-200' : 'text-gray-800'}`}>
                         <input 
                           type="checkbox"
                           checked={path.requiredOptionIds.includes(opt.id)}
@@ -432,7 +448,7 @@ const PropertiesPanel = ({ selectedNode, updateNode }: { selectedNode: AppNode |
                       </label>
                     ))}
                     {path.requiredOptionIds.length === 0 && (
-                      <div className="text-[10px] text-gray-400 italic">No constraints = Default/Else path</div>
+                      <div className={`text-[10px] italic ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>No constraints = Default/Else path</div>
                     )}
                   </div>
                 </div>
@@ -450,7 +466,7 @@ const PropertiesPanel = ({ selectedNode, updateNode }: { selectedNode: AppNode |
               checked={data.canRestart || false}
               onChange={(e) => updateNode(id, { canRestart: e.target.checked })}
             />
-            <label htmlFor="canRestart" className="text-sm text-gray-800 font-medium">Allow Restart</label>
+            <label htmlFor="canRestart" className={`text-sm font-medium ${isDarkMode ? 'text-slate-100' : 'text-gray-800'}`}>Allow Restart</label>
           </div>
         )}
       </div>
@@ -463,11 +479,13 @@ const PropertiesPanel = ({ selectedNode, updateNode }: { selectedNode: AppNode |
 const Viewer = ({ 
   nodes, 
   edges, 
-  onExit 
+  onExit,
+  isDarkMode,
 }: { 
   nodes: AppNode[], 
   edges: Edge[], 
-  onExit: () => void 
+  onExit: () => void,
+  isDarkMode: boolean,
 }) => {
   const [history, setHistory] = useState<string[]>([]);
   const [currentNodeId, setCurrentNodeId] = useState<string>('start');
@@ -478,15 +496,12 @@ const Viewer = ({
   // Incoming nodes (parents) - Purely based on graph topology
   const prevNodes = useMemo(() => {
     const incomingEdgeIds = edges.filter(e => e.target === currentNodeId).map(e => e.source);
-    // Unique sources
     const uniqueSources = Array.from(new Set(incomingEdgeIds));
     return uniqueSources.map(id => nodes.find(n => n.id === id)).filter(Boolean) as AppNode[];
   }, [currentNodeId, edges, nodes]);
 
   // Outgoing nodes (children) - Purely based on graph topology
   const nextNodes = useMemo(() => {
-    // For radio/checkbox, we need to look at specific handles, but for "Next" preview, 
-    // we just show all possible distinct target nodes.
     const outgoingEdgeTargets = edges.filter(e => e.source === currentNodeId).map(e => e.target);
     const uniqueTargets = Array.from(new Set(outgoingEdgeTargets));
     return uniqueTargets.map(id => nodes.find(n => n.id === id)).filter(Boolean) as AppNode[];
@@ -499,7 +514,7 @@ const Viewer = ({
     setHistory(newHistory);
     if (prevId) {
       setCurrentNodeId(prevId);
-      setSelections([]); // Reset selections when going back
+      setSelections([]);
     }
   };
 
@@ -518,31 +533,20 @@ const Viewer = ({
     let nextEdge: Edge | undefined;
 
     if (currentNode.data.type === 'static') {
-      // Just take the first edge
       nextEdge = edges.find(e => e.source === currentNodeId);
     } else if (currentNode.data.type === 'radio') {
       const selectedOptionId = selections[0];
-      // Find edge connected to this source handle
       nextEdge = edges.find(e => e.source === currentNodeId && e.sourceHandle === selectedOptionId);
     } else if (currentNode.data.type === 'checkbox') {
-      // Match selections against paths
       const paths = currentNode.data.paths || [];
-      
+
       const sortedPaths = [...paths].sort((a, b) => {
         const lenDiff = b.requiredOptionIds.length - a.requiredOptionIds.length;
         if (lenDiff !== 0) return lenDiff;
         return a.label.localeCompare(b.label);
       });
 
-      const matchedPath = sortedPaths.find(path => {
-        // Only require logic: If I selected A and B, and path requires A, does it match?
-        // Usually Exact Match or Subset Match.
-        // Prompt said: "choose multiple ... and proceed to the node corresponding to combination"
-        // Let's assume strict subset requirement: All requirements must be in selections. 
-        // Note: If selections = [A, B] and Path1 req [A], Path2 req [A, B]. Sorted puts Path2 first.
-        // If selections = [A, C] and Path1 req [A]. It matches.
-        return path.requiredOptionIds.every(req => selections.includes(req));
-      });
+      const matchedPath = sortedPaths.find(path => path.requiredOptionIds.every(req => selections.includes(req)));
 
       if (matchedPath) {
         nextEdge = edges.find(e => e.source === currentNodeId && e.sourceHandle === matchedPath.id);
@@ -550,17 +554,16 @@ const Viewer = ({
     }
 
     if (nextEdge) {
-      // Ensure target node exists
       const targetNode = nodes.find(n => n.id === nextEdge!.target);
       if (targetNode) {
         setHistory([...history, currentNodeId]);
         setCurrentNodeId(nextEdge.target);
         setSelections([]);
       } else {
-        alert("Configuration Error: The next node is missing.");
+        alert('Configuration Error: The next node is missing.');
       }
     } else {
-      alert("No valid path defined for this selection.");
+      alert('No valid path defined for this selection.');
     }
   };
 
@@ -577,123 +580,131 @@ const Viewer = ({
   if (!currentNode) return <div>Node not found</div>;
 
   return (
-    <div className="fixed inset-0 bg-slate-50 z-50 flex flex-col">
-      {/* Header */}
-      <div className="h-16 bg-white border-b flex items-center px-6 justify-between shrink-0">
-        <h2 className="font-bold text-gray-800">Preview Mode</h2>
-        <button onClick={onExit} className="text-gray-600 hover:text-red-600 flex items-center gap-2">
+    <div className={`fixed inset-0 z-50 flex flex-col ${isDarkMode ? 'bg-slate-950' : 'bg-slate-50'}`}>
+      <div className={`h-16 border-b flex items-center px-6 justify-between shrink-0 ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white'}`}>
+        <h2 className={`font-bold ${isDarkMode ? 'text-slate-100' : 'text-gray-800'}`}>Preview Mode</h2>
+        <button onClick={onExit} className={`flex items-center gap-2 ${isDarkMode ? 'text-slate-300 hover:text-red-400' : 'text-gray-600 hover:text-red-600'}`}>
           <Flag size={18} /> Exit
         </button>
       </div>
 
-      {/* Main Wizard Layout */}
       <div className="flex-1 flex items-center justify-center p-8 overflow-hidden relative">
-        
-        {/* Connection Lines Layer (Conceptual) */}
         <div className="absolute inset-0 pointer-events-none opacity-20 flex items-center justify-center">
-            {prevNodes.length > 0 && <div className="w-[300px] h-[2px] bg-slate-400 absolute left-[25%]"></div>}
-            {nextNodes.length > 0 && <div className="w-[300px] h-[2px] bg-slate-400 absolute right-[25%]"></div>}
+          {prevNodes.length > 0 && <div className={`w-[300px] h-[2px] absolute left-[25%] ${isDarkMode ? 'bg-slate-600' : 'bg-slate-400'}`}></div>}
+          {nextNodes.length > 0 && <div className={`w-[300px] h-[2px] absolute right-[25%] ${isDarkMode ? 'bg-slate-600' : 'bg-slate-400'}`}></div>}
         </div>
 
         <div className="w-full max-w-[90vw] grid grid-cols-3 gap-48 items-center h-full relative z-10">
-          
-          {/* LEFT COLUMN: Past */}
           <div className="flex flex-col items-end justify-center gap-4 opacity-80 transition-all duration-500">
-             {prevNodes.length === 0 && <div className="text-sm text-gray-500 font-medium">Start of flow</div>}
-             {prevNodes.map(node => (
-               <div key={node.id} className="bg-white p-4 rounded-lg border border-gray-300 w-64 text-right shadow-sm">
-                 <div className="text-xs uppercase font-bold text-gray-600 mb-1">{node.data.label}</div>
-                 <div className="text-sm text-gray-900 line-clamp-2">{node.data.content}</div>
-               </div>
-             ))}
+            {prevNodes.length === 0 && <div className={`text-sm font-medium ${isDarkMode ? 'text-slate-500' : 'text-gray-500'}`}>Start of flow</div>}
+            {prevNodes.map(node => (
+              <div key={node.id} className={`p-4 rounded-lg border w-64 text-right shadow-sm ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-300'}`}>
+                <div className={`text-xs uppercase font-bold mb-1 ${isDarkMode ? 'text-slate-400' : 'text-gray-600'}`}>{node.data.label}</div>
+                <div className={`text-sm line-clamp-2 ${isDarkMode ? 'text-slate-100' : 'text-gray-900'}`}>{node.data.content}</div>
+              </div>
+            ))}
           </div>
 
-          {/* CENTER COLUMN: Present (Active) */}
           <div className="flex flex-col items-center justify-center z-20">
-             <div className="w-[450px] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col transition-all duration-500 transform scale-100">
-                <div className={`h-2 w-full ${NODE_TYPES_CONFIG[currentNode.data.type].color.split(' ')[0].replace('bg-', 'bg-')}`} />
-                <div className="p-8">
-                  <div className="flex items-center gap-2 mb-4 text-gray-500 text-sm font-bold uppercase tracking-wider">
-                     {NODE_TYPES_CONFIG[currentNode.data.type].label}
-                  </div>
-                  
-                  <h1 className="text-2xl font-bold text-gray-900 mb-6 leading-relaxed">
-                    {currentNode.data.content}
-                  </h1>
+            <div className={`w-[450px] rounded-xl shadow-2xl border overflow-hidden flex flex-col transition-all duration-500 transform scale-100 ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-200'}`}>
+              <div className={`h-2 w-full ${NODE_TYPES_CONFIG[currentNode.data.type].color.split(' ')[0].replace('bg-', 'bg-')}`} />
+              <div className="p-8">
+                <div className={`flex items-center gap-2 mb-4 text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                  {NODE_TYPES_CONFIG[currentNode.data.type].label}
+                </div>
 
-                  {/* Inputs */}
-                  {(currentNode.data.type === 'radio' || currentNode.data.type === 'checkbox') && (
-                    <div className="space-y-3 mb-8">
-                       {currentNode.data.options?.map(opt => {
-                         const isSelected = selections.includes(opt.id);
-                         return (
-                           <div 
-                              key={opt.id}
-                              onClick={() => toggleSelection(opt.id, currentNode.data.type === 'radio')}
-                              className={`
-                                p-4 rounded-lg border-2 cursor-pointer transition-all flex items-center gap-3
-                                ${isSelected ? 'border-blue-500 bg-blue-50 text-blue-900' : 'border-gray-200 hover:border-gray-300 text-gray-800'}
-                              `}
-                           >
-                             <div className={`
-                               w-5 h-5 rounded-full border-2 flex items-center justify-center
-                               ${currentNode.data.type === 'checkbox' ? 'rounded-md' : 'rounded-full'}
-                               ${isSelected ? 'border-blue-500 bg-blue-500' : 'border-gray-300'}
-                             `}>
-                               {isSelected && <Check size={12} className="text-white" />}
-                             </div>
-                             <span className="font-medium">{opt.label}</span>
-                           </div>
-                         );
-                       })}
-                    </div>
+                <h1 className={`text-2xl font-bold mb-6 leading-relaxed ${isDarkMode ? 'text-slate-100' : 'text-gray-900'}`}>
+                  {currentNode.data.content}
+                </h1>
+
+                {currentNode.data.type === 'radio' && (
+                  <div className="space-y-3 mb-8">
+                    {currentNode.data.options?.map(opt => (
+                      <button
+                        key={opt.id}
+                        onClick={() => toggleSelection(opt.id, true)}
+                        className={`w-full text-left p-3 rounded-lg border-2 transition-all ${
+                          selections.includes(opt.id)
+                            ? 'border-blue-500 bg-blue-500/10 text-blue-300'
+                            : isDarkMode
+                              ? 'border-slate-700 bg-slate-800 text-slate-200 hover:border-slate-500'
+                              : 'border-gray-200 hover:border-blue-400 hover:bg-blue-50 text-gray-800'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {currentNode.data.type === 'checkbox' && (
+                  <div className="space-y-3 mb-8">
+                    {currentNode.data.options?.map(opt => (
+                      <button
+                        key={opt.id}
+                        onClick={() => toggleSelection(opt.id, false)}
+                        className={`w-full text-left p-3 rounded-lg border-2 transition-all ${
+                          selections.includes(opt.id)
+                            ? 'border-purple-500 bg-purple-500/10 text-purple-300'
+                            : isDarkMode
+                              ? 'border-slate-700 bg-slate-800 text-slate-200 hover:border-slate-500'
+                              : 'border-gray-200 hover:border-purple-400 hover:bg-purple-50 text-gray-800'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {currentNode.data.type === 'end' && (
+                  <div className={`mb-8 p-4 rounded-lg border ${isDarkMode ? 'bg-green-950/20 border-green-900/50 text-green-300' : 'bg-green-50 border-green-200 text-green-800'}`}>
+                    <Check size={18} className="inline mr-2" /> End of flow reached
+                  </div>
+                )}
+
+                <div className="flex gap-3 mt-4">
+                  {history.length > 0 && (
+                    <button
+                      onClick={handleBack}
+                      className={`flex-1 py-3 px-4 rounded-lg border-2 font-bold flex items-center justify-center gap-2 ${isDarkMode ? 'border-slate-600 text-slate-100 hover:bg-slate-800' : 'border-gray-300 text-gray-800 hover:bg-gray-100'}`}
+                    >
+                      <ArrowLeft size={18} /> Back
+                    </button>
                   )}
 
-                  {/* Actions */}
-                  <div className="flex gap-4 pt-4 border-t border-gray-100 mt-auto">
-                     {history.length > 0 && (
-                       <button 
-                         onClick={handleBack}
-                         className="flex-1 py-3 px-4 rounded-lg border-2 border-gray-300 font-bold text-gray-800 hover:bg-gray-100 flex items-center justify-center gap-2"
-                       >
-                         <ArrowLeft size={18} /> Back
-                       </button>
-                     )}
-                     
-                     {currentNode.data.type !== 'end' ? (
-                       <button 
-                         onClick={handleContinue}
-                         disabled={currentNode.data.type !== 'static' && selections.length === 0}
-                         className="flex-[2] py-3 px-4 rounded-lg bg-blue-600 font-semibold text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                       >
-                         Continue <ChevronRight size={18} />
-                       </button>
-                     ) : (
-                       currentNode.data.canRestart && (
-                         <button 
-                          onClick={handleContinue}
-                          className="flex-[2] py-3 px-4 rounded-lg bg-green-600 font-semibold text-white hover:bg-green-700 flex items-center justify-center gap-2"
-                         >
-                           <RotateCcw size={18} /> Restart
-                         </button>
-                       )
-                     )}
-                  </div>
+                  {currentNode.data.type !== 'end' ? (
+                    <button
+                      onClick={handleContinue}
+                      disabled={currentNode.data.type !== 'static' && selections.length === 0}
+                      className="flex-[2] py-3 px-4 rounded-lg bg-blue-600 font-semibold text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      Continue <ChevronRight size={18} />
+                    </button>
+                  ) : (
+                    currentNode.data.canRestart && (
+                      <button
+                        onClick={handleContinue}
+                        className="flex-[2] py-3 px-4 rounded-lg bg-green-600 font-semibold text-white hover:bg-green-700 flex items-center justify-center gap-2"
+                      >
+                        <RotateCcw size={18} /> Restart
+                      </button>
+                    )
+                  )}
                 </div>
-             </div>
+              </div>
+            </div>
           </div>
 
-          {/* RIGHT COLUMN: Future (Preview) */}
           <div className="flex flex-col items-start justify-center gap-4 opacity-80 transition-all duration-500">
-            {nextNodes.length === 0 && currentNode.data.type !== 'end' && <div className="text-sm text-gray-500 font-medium">End of path</div>}
+            {nextNodes.length === 0 && currentNode.data.type !== 'end' && <div className={`text-sm font-medium ${isDarkMode ? 'text-slate-500' : 'text-gray-500'}`}>End of path</div>}
             {nextNodes.map(node => (
-               <div key={node.id} className="bg-white p-4 rounded-lg border border-gray-300 w-64 shadow-sm">
-                 <div className="text-xs uppercase font-bold text-gray-600 mb-1">{node.data.label}</div>
-                 <div className="text-sm text-gray-900 line-clamp-2">{node.data.content}</div>
-               </div>
-             ))}
+              <div key={node.id} className={`p-4 rounded-lg border w-64 shadow-sm ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-300'}`}>
+                <div className={`text-xs uppercase font-bold mb-1 ${isDarkMode ? 'text-slate-400' : 'text-gray-600'}`}>{node.data.label}</div>
+                <div className={`text-sm line-clamp-2 ${isDarkMode ? 'text-slate-100' : 'text-gray-900'}`}>{node.data.content}</div>
+              </div>
+            ))}
           </div>
-
         </div>
       </div>
     </div>
@@ -738,6 +749,12 @@ const App = () => {
   const [mode, setMode] = useState<FlowMode>('editor');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const edgeColor = isDarkMode ? '#94a3b8' : '#475569';
+  const defaultEdgeOptions = useMemo(() => ({
+    animated: false,
+    style: { stroke: edgeColor, strokeWidth: 2 },
+    markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor },
+  }), [edgeColor]);
 
   // Modal State
   const [showUrlModal, setShowUrlModal] = useState(false);
@@ -782,6 +799,16 @@ const App = () => {
   }, [isDarkMode]);
 
   useEffect(() => {
+    setEdges((eds) =>
+      eds.map((edge) => ({
+        ...edge,
+        style: { ...(edge.style || {}), stroke: edgeColor, strokeWidth: 2 },
+        markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor },
+      })),
+    );
+  }, [edgeColor, setEdges]);
+
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       // Allow default behavior for inputs
       if (
@@ -806,8 +833,12 @@ const App = () => {
   const selectedNode = useMemo(() => nodes.find(n => n.id === selectedNodeId) || null, [nodes, selectedNodeId]);
 
   const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => addEdge({ ...params, markerEnd: { type: MarkerType.ArrowClosed } }, eds)),
-    [setEdges],
+    (params: Connection) => setEdges((eds) => addEdge({
+      ...params,
+      style: { stroke: edgeColor, strokeWidth: 2 },
+      markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor },
+    }, eds)),
+    [edgeColor, setEdges],
   );
 
   const onDragOver = useCallback((event: React.DragEvent) => {
@@ -1118,6 +1149,7 @@ const App = () => {
       </div>
 
       {/* Editor Body */}
+      <ThemeModeContext.Provider value={isDarkMode}>
       <div className="flex-1 flex overflow-hidden relative">
         {/* Canvas */}
         <div className={`flex-1 h-full relative transition-colors ${isDarkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
@@ -1131,6 +1163,8 @@ const App = () => {
             onDragOver={onDragOver}
             onPaneClick={() => setSelectedNodeId(null)}
             nodeTypes={nodeTypes}
+            colorMode={isDarkMode ? 'dark' : 'light'}
+            defaultEdgeOptions={defaultEdgeOptions}
             fitView
             snapToGrid
             deleteKeyCode={['Backspace', 'Delete']}
@@ -1146,6 +1180,7 @@ const App = () => {
           <PropertiesPanel selectedNode={selectedNode} updateNode={updateNode} />
         )}
       </div>
+      </ThemeModeContext.Provider>
 
       {/* URL Import Modal */}
       {showUrlModal && (
@@ -1194,7 +1229,7 @@ const App = () => {
 
       {/* Viewer Overlay */}
       {mode === 'viewer' && (
-        <Viewer nodes={nodes} edges={edges} onExit={() => setMode('editor')} />
+        <Viewer nodes={nodes} edges={edges} onExit={() => setMode('editor')} isDarkMode={isDarkMode} />
       )}
     </div>
   );
