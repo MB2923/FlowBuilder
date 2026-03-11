@@ -13,7 +13,7 @@ import {
   useReactFlow,
   useOnSelectionChange,
 } from '@xyflow/react';
-import { ArrowLeft, Book, ChevronRight, FileJson, Folder, Layout, Link as LinkIcon, Loader2, Moon, Play, Save, Sun, Upload, X } from 'lucide-react';
+import { ArrowLeft, Book, ChevronRight, FileJson, Folder, Layout, Link as LinkIcon, Loader2, Moon, Play, Redo2, Save, Sun, Undo2, Upload, X } from 'lucide-react';
 import { DraggableToolboxItem } from './components/DraggableToolboxItem';
 import { nodeTypes } from './components/NodeTypes';
 import { PropertiesPanel } from './components/PropertiesPanel';
@@ -55,6 +55,10 @@ interface GitHubFile {
   type: 'file' | 'dir';
 }
 
+
+const DRAFT_STORAGE_KEY = 'flowbuilder-draft-v1';
+const MAX_HISTORY_SIZE = 100;
+
 const App = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState<AppNode>(INITIAL_NODES);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -77,6 +81,9 @@ const App = () => {
   const [activeFolder, setActiveFolder] = useState<CatalogFolderConfig | null>(null);
   const [repoFiles, setRepoFiles] = useState<GitHubFile[]>([]);
   const [loadingCatalog, setLoadingCatalog] = useState(false);
+  const [isDraftLoaded, setIsDraftLoaded] = useState(false);
+  const [history, setHistory] = useState(() => [{ nodes: INITIAL_NODES, edges: [] as Edge[] }]);
+  const [historyIndex, setHistoryIndex] = useState(0);
 
   const { deleteElements, screenToFlowPosition } = useReactFlow<AppNode>();
 
@@ -110,29 +117,25 @@ const App = () => {
     localStorage.setItem('flowbuilder-theme', isDarkMode ? 'dark' : 'light');
   }, [isDarkMode]);
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // Allow default behavior for inputs
-      if (
-        event.target instanceof HTMLInputElement || 
-        event.target instanceof HTMLTextAreaElement || 
-        (event.target as HTMLElement).isContentEditable
-      ) {
-        return;
-      }
-
-      if (['Delete', 'Backspace'].includes(event.key)) {
-        if (selectedElements.nodes.length > 0 || selectedElements.edges.length > 0) {
-          deleteElements({ nodes: selectedElements.nodes, edges: selectedElements.edges });
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [deleteElements, selectedElements]);
-
   const selectedNode = useMemo(() => nodes.find(n => n.id === selectedNodeId) || null, [nodes, selectedNodeId]);
+
+  const commitSnapshot = useCallback((nextNodes: AppNode[], nextEdges: Edge[]) => {
+    setHistory((prevHistory) => {
+      const nextSnapshot = JSON.stringify({ nodes: nextNodes, edges: nextEdges });
+      const currentSnapshot = JSON.stringify(prevHistory[historyIndex]);
+      if (nextSnapshot === currentSnapshot) {
+        return prevHistory;
+      }
+
+      const trimmed = prevHistory.slice(0, historyIndex + 1);
+      const updated = [...trimmed, { nodes: nextNodes, edges: nextEdges }];
+      if (updated.length > MAX_HISTORY_SIZE) {
+        updated.shift();
+      }
+      setHistoryIndex(updated.length - 1);
+      return updated;
+    });
+  }, [historyIndex]);
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params as Edge, eds)),
@@ -199,10 +202,106 @@ const App = () => {
     if (isFlowData(data)) {
       setNodes(data.nodes);
       setEdges(data.edges);
+      setHistory([{ nodes: data.nodes, edges: data.edges }]);
+      setHistoryIndex(0);
       return true;
     }
     return false;
   };
+
+  const handleUndo = useCallback(() => {
+    if (historyIndex === 0) return;
+    const previousSnapshot = history[historyIndex - 1];
+    setNodes(previousSnapshot.nodes);
+    setEdges(previousSnapshot.edges);
+    setHistoryIndex(historyIndex - 1);
+  }, [history, historyIndex, setEdges, setNodes]);
+
+  const handleRedo = useCallback(() => {
+    if (historyIndex >= history.length - 1) return;
+    const nextSnapshot = history[historyIndex + 1];
+    setNodes(nextSnapshot.nodes);
+    setEdges(nextSnapshot.edges);
+    setHistoryIndex(historyIndex + 1);
+  }, [history, historyIndex, setEdges, setNodes]);
+
+  useEffect(() => {
+    const savedDraft = localStorage.getItem(DRAFT_STORAGE_KEY);
+    if (savedDraft) {
+      try {
+        const parsedDraft = JSON.parse(savedDraft);
+        if (isFlowData(parsedDraft)) {
+          setNodes(parsedDraft.nodes);
+          setEdges(parsedDraft.edges);
+          setHistory([{ nodes: parsedDraft.nodes, edges: parsedDraft.edges }]);
+          setHistoryIndex(0);
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    }
+    setIsDraftLoaded(true);
+  }, [setEdges, setNodes]);
+
+  useEffect(() => {
+    if (!isDraftLoaded) return;
+    const timeout = setTimeout(() => {
+      localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify({ nodes, edges }));
+    }, 500);
+
+    return () => clearTimeout(timeout);
+  }, [edges, isDraftLoaded, nodes]);
+
+  useEffect(() => {
+    if (!isDraftLoaded) return;
+    commitSnapshot(nodes, edges);
+  }, [commitSnapshot, edges, isDraftLoaded, nodes]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Allow default behavior for inputs
+      if (
+        event.target instanceof HTMLInputElement || 
+        event.target instanceof HTMLTextAreaElement || 
+        (event.target as HTMLElement).isContentEditable
+      ) {
+        return;
+      }
+
+      if (['Delete', 'Backspace'].includes(event.key)) {
+        if (selectedElements.nodes.length > 0 || selectedElements.edges.length > 0) {
+          deleteElements({ nodes: selectedElements.nodes, edges: selectedElements.edges });
+        }
+        return;
+      }
+
+      const isModKey = event.metaKey || event.ctrlKey;
+      if (!isModKey) {
+        return;
+      }
+
+      if (event.key.toLowerCase() === 'z' && event.shiftKey) {
+        event.preventDefault();
+        handleRedo();
+        return;
+      }
+
+      if (event.key.toLowerCase() === 'z') {
+        event.preventDefault();
+        handleUndo();
+        return;
+      }
+
+      if (event.key.toLowerCase() === 'y') {
+        event.preventDefault();
+        handleRedo();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [deleteElements, handleRedo, handleUndo, selectedElements]);
+
 
   const handleLoad = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -349,6 +448,22 @@ const App = () => {
           </button>
           <button onClick={handleLayout} title="Auto Layout" className={`p-2 rounded text-sm flex gap-1 font-medium transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-100'}`}>
              <Layout size={18} />
+          </button>
+          <button
+            onClick={handleUndo}
+            disabled={historyIndex === 0}
+            title="Undo"
+            className={`p-2 rounded text-sm flex gap-1 font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${isDarkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-100'}`}
+          >
+            <Undo2 size={18} />
+          </button>
+          <button
+            onClick={handleRedo}
+            disabled={historyIndex >= history.length - 1}
+            title="Redo"
+            className={`p-2 rounded text-sm flex gap-1 font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${isDarkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-100'}`}
+          >
+            <Redo2 size={18} />
           </button>
           <div className={`h-6 w-px mx-1 ${isDarkMode ? 'bg-slate-600' : 'bg-gray-300'}`}></div>
           <label title="Import from File" className={`p-2 rounded cursor-pointer text-sm flex gap-1 items-center font-medium transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-100'}`}>
