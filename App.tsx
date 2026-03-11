@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ReactFlow,
   MiniMap,
@@ -17,10 +17,11 @@ import { ArrowLeft, Book, ChevronRight, FileJson, Folder, Layout, Link as LinkIc
 import { DraggableToolboxItem } from './components/DraggableToolboxItem';
 import { nodeTypes } from './components/NodeTypes';
 import { PropertiesPanel } from './components/PropertiesPanel';
-import { Viewer } from './components/Viewer';
 import { CATALOG_FOLDERS, INITIAL_NODES, NODE_TYPES_CONFIG } from './flow/config';
 import { AppErrorLike, AppNode, CatalogFolderConfig, FlowMode, NodeData, NodeType, ThemeModeContext } from './flow/types';
 import { getLayoutedElements, isFlowData } from './flow/utils';
+
+const Viewer = lazy(() => import('./components/Viewer').then((module) => ({ default: module.Viewer })));
 
 // --- Error Suppression ---
 // ResizeObserver loop errors are benign layout thrashing warnings common in complex flex/grid + canvas apps.
@@ -642,7 +643,13 @@ const App = () => {
 
       {/* Viewer Overlay */}
       {mode === 'viewer' && (
-        <Viewer nodes={nodes} edges={edges} onExit={() => setMode('editor')} isDarkMode={isDarkMode} />
+        <Suspense fallback={
+          <div className={`h-screen flex items-center justify-center ${isDarkMode ? 'bg-slate-950 text-slate-200' : 'bg-gray-100 text-gray-700'}`}>
+            <Loader2 className="w-6 h-6 animate-spin" />
+          </div>
+        }>
+          <Viewer nodes={nodes} edges={edges} onExit={() => setMode('editor')} isDarkMode={isDarkMode} />
+        </Suspense>
       )}
     </div>
   );

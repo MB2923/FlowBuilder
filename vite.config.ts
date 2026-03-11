@@ -14,6 +14,31 @@ export default defineConfig(({ mode }) => {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
         'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
       },
+      build: {
+        rollupOptions: {
+          output: {
+            manualChunks(id) {
+              if (!id.includes('node_modules')) {
+                return undefined;
+              }
+
+              if (id.includes('@xyflow/react') || id.includes('@reactflow')) {
+                return 'xyflow';
+              }
+
+              if (id.includes('lucide-react')) {
+                return 'icons';
+              }
+
+              if (id.includes('react') || id.includes('scheduler')) {
+                return 'react-vendor';
+              }
+
+              return 'vendor';
+            },
+          },
+        },
+      },
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),
