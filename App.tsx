@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ReactFlow,
   MiniMap,
@@ -13,7 +13,7 @@ import {
   useReactFlow,
   useOnSelectionChange,
 } from '@xyflow/react';
-import { ArrowLeft, Book, ChevronRight, FileJson, Folder, Layout, Link as LinkIcon, Loader2, Moon, Play, Redo2, Save, Sun, Undo2, Upload, X } from 'lucide-react';
+import { ArrowLeft, Book, ChevronRight, FileJson, Folder, Layout, Link as LinkIcon, Loader2, Moon, Play, Redo2, Save, Share2, Sun, Undo2, Upload, X } from 'lucide-react';
 import { DraggableToolboxItem } from './components/DraggableToolboxItem';
 import { nodeTypes } from './components/NodeTypes';
 import { PropertiesPanel } from './components/PropertiesPanel';
@@ -59,6 +59,25 @@ interface GitHubFile {
 
 const DRAFT_STORAGE_KEY = 'flowbuilder-draft-v1';
 const MAX_HISTORY_SIZE = 100;
+const FLOW_URL_PARAM = 'flowUrl';
+const FLOW_DATA_PARAM = 'flowData';
+
+const encodeFlowData = (flow: { nodes: AppNode[]; edges: Edge[] }) => {
+  const json = JSON.stringify(flow);
+  const bytes = new TextEncoder().encode(json);
+  let binary = '';
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary);
+};
+
+const decodeFlowData = (encoded: string) => {
+  const binary = atob(encoded);
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  const json = new TextDecoder().decode(bytes);
+  return JSON.parse(json);
+};
 
 const App = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState<AppNode>(INITIAL_NODES);
@@ -83,8 +102,10 @@ const App = () => {
   const [repoFiles, setRepoFiles] = useState<GitHubFile[]>([]);
   const [loadingCatalog, setLoadingCatalog] = useState(false);
   const [isDraftLoaded, setIsDraftLoaded] = useState(false);
+  const [isInitializingFlow, setIsInitializingFlow] = useState(true);
   const [history, setHistory] = useState(() => [{ nodes: INITIAL_NODES, edges: [] as Edge[] }]);
   const [historyIndex, setHistoryIndex] = useState(0);
+  const urlImportAttemptedRef = useRef(false);
 
   const { deleteElements, screenToFlowPosition } = useReactFlow<AppNode>();
 
@@ -241,8 +262,41 @@ const App = () => {
   }, [history, historyIndex, setEdges, setNodes]);
 
   useEffect(() => {
+    const loadFlowFromSearchParams = async () => {
+      const searchParams = new URLSearchParams(window.location.search);
+      const encodedFlow = searchParams.get(FLOW_DATA_PARAM);
+      const externalFlowUrl = searchParams.get(FLOW_URL_PARAM);
+
+      if (encodedFlow) {
+        try {
+          const parsed = decodeFlowData(encodedFlow);
+          if (loadFlowData(parsed)) {
+            urlImportAttemptedRef.current = true;
+            return;
+          }
+        } catch (error) {
+          console.error(error);
+          alert('Invalid embedded flowData link.');
+        }
+      }
+
+      if (externalFlowUrl) {
+        const success = await executeUrlImport(externalFlowUrl);
+        if (success) {
+          urlImportAttemptedRef.current = true;
+        }
+      }
+    };
+
+    loadFlowFromSearchParams().finally(() => {
+      setIsInitializingFlow(false);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (isInitializingFlow) return;
     const savedDraft = localStorage.getItem(DRAFT_STORAGE_KEY);
-    if (savedDraft) {
+    if (savedDraft && !urlImportAttemptedRef.current) {
       try {
         const parsedDraft = JSON.parse(savedDraft);
         if (isFlowData(parsedDraft)) {
@@ -256,7 +310,7 @@ const App = () => {
       }
     }
     setIsDraftLoaded(true);
-  }, [setEdges, setNodes]);
+  }, [isInitializingFlow, setEdges, setNodes]);
 
   useEffect(() => {
     if (!isDraftLoaded) return;
@@ -356,6 +410,10 @@ const App = () => {
       const data = await res.json();
       
       if (loadFlowData(data)) {
+        const parsedUrl = new URL(window.location.href);
+        parsedUrl.searchParams.set(FLOW_URL_PARAM, urlToFetch);
+        parsedUrl.searchParams.delete(FLOW_DATA_PARAM);
+        window.history.replaceState({}, '', parsedUrl.toString());
         return true;
       } else {
         alert('Invalid flowchart JSON structure.');
@@ -372,6 +430,19 @@ const App = () => {
       if (isCors) msg = `Network Error (CORS). ensure "raw" link used.`;
       alert(msg);
       return false;
+    }
+  };
+
+  const handleCopyShareLink = async () => {
+    try {
+      const shareUrl = new URL(window.location.href);
+      shareUrl.searchParams.delete(FLOW_URL_PARAM);
+      shareUrl.searchParams.set(FLOW_DATA_PARAM, encodeFlowData({ nodes, edges }));
+      await navigator.clipboard.writeText(shareUrl.toString());
+      alert('Share link copied to clipboard.');
+    } catch (error) {
+      console.error(error);
+      alert('Unable to copy share link.');
     }
   };
   
@@ -487,6 +558,9 @@ const App = () => {
           </label>
           <button onClick={handleImportFromUrl} title="Import from URL" className={`p-2 rounded text-sm flex gap-1 items-center font-medium transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-100'}`}>
             <LinkIcon size={18} />
+          </button>
+          <button onClick={handleCopyShareLink} title="Copy share link" className={`p-2 rounded text-sm flex gap-1 items-center font-medium transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-100'}`}>
+            <Share2 size={18} />
           </button>
           <button onClick={handleSave} title="Save" className={`p-2 rounded text-sm flex gap-1 items-center font-medium transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-100'}`}>
             <Save size={18} />
