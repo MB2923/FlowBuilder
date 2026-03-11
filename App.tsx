@@ -1,0 +1,1236 @@
+import React, { useState, useCallback, useMemo, useEffect, createContext, useContext } from 'react';
+import {
+  ReactFlow,
+  MiniMap,
+  Controls,
+  Background,
+  useNodesState,
+  useEdgesState,
+  addEdge,
+  Handle,
+  Position,
+  Connection,
+  Edge,
+  Node,
+  MarkerType,
+  useReactFlow,
+  useOnSelectionChange,
+} from '@xyflow/react';
+import dagre from 'dagre';
+import { 
+  Save, Upload, Play, Plus, Trash2, 
+  ChevronRight, ArrowLeft, Check, Circle, CheckSquare, 
+  FileText, Flag, Settings, RotateCcw, Layout, Moon, Sun,
+  Link as LinkIcon, X, Book, Folder, FileJson, Loader2
+} from 'lucide-react';
+
+// --- CATALOG CONFIGURATION ---
+// Define your GitHub folders here.
+// The app will fetch: https://api.github.com/repos/{owner}/{repo}/contents/{path}
+interface CatalogFolderConfig {
+  id: string;
+  name: string;
+  owner: string;
+  repo: string;
+  path: string;
+}
+
+const CATALOG_FOLDERS: CatalogFolderConfig[] = [
+  {
+    id: 'demo-1',
+    name: 'Example Flowcharts',
+    owner: 'langchain-ai', // Example: public repo
+    repo: 'langgraph-example', // Example: public repo
+    path: 'examples' // Example folder
+  },
+  {
+    id: 'default',
+    name: 'default',
+    owner: 'MB2923',
+    repo: 'flowbuilder-charts',
+    path: ''
+  }
+];
+
+// --- Error Suppression ---
+// ResizeObserver loop errors are benign layout thrashing warnings common in complex flex/grid + canvas apps.
+const resizeObserverLoopErr = 'ResizeObserver loop completed with undelivered notifications';
+const resizeObserverLoopLimitErr = 'ResizeObserver loop limit exceeded';
+
+window.addEventListener('error', (e) => {
+  if (
+    e.message.includes(resizeObserverLoopErr) ||
+    e.message.includes(resizeObserverLoopLimitErr)
+  ) {
+    e.stopImmediatePropagation();
+    e.preventDefault();
+  }
+});
+
+// Patch console.error to catch frameworks/overlays that might intercept this
+const originalConsoleError = console.error;
+console.error = (...args: any[]) => {
+  if (
+    typeof args[0] === 'string' && 
+    (args[0].includes(resizeObserverLoopErr) || args[0].includes(resizeObserverLoopLimitErr))
+  ) {
+    return;
+  }
+  originalConsoleError(...args);
+};
+
+// --- Types ---
+
+type FlowMode = 'editor' | 'viewer';
+
+type NodeType = 'radio' | 'checkbox' | 'static' | 'end';
+
+interface Option {
+  id: string;
+  label: string;
+}
+
+interface LogicPath {
+  id: string; // Creates a Handle ID
+  label: string;
+  requiredOptionIds: string[]; // Logic: AND condition for these options
+}
+
+interface NodeData {
+  label: string; // Internal name
+  content: string; // Display text/question
+  type: NodeType;
+  options?: Option[]; // For radio/checkbox
+  paths?: LogicPath[]; // For checkbox logic specifically
+  canRestart?: boolean; // For end node
+  [key: string]: unknown; // Fix: Index signature for Record<string, unknown> compatibility
+}
+
+type AppNode = Node<NodeData>;
+
+const ThemeModeContext = createContext(false);
+
+interface FlowData {
+  nodes: AppNode[];
+  edges: Edge[];
+}
+
+interface AppErrorLike {
+  name?: string;
+  message?: string;
+}
+
+// --- Constants ---
+
+const INITIAL_NODES: AppNode[] = [
+  {
+    id: 'start',
+    type: 'static',
+    position: { x: 0, y: 150 },
+    data: { label: 'Start', content: 'Welcome! Let us begin the process.', type: 'static' },
+  },
+];
+
+const NODE_TYPES_CONFIG = {
+  static: { 
+    label: 'Info Card', 
+    icon: FileText, 
+    color: 'bg-gray-50 border-gray-200',
+    description: 'Display text or information. No choices.'
+  },
+  radio: { 
+    label: 'Single Choice', 
+    icon: Circle, 
+    color: 'bg-blue-50 border-blue-200',
+    description: 'User must pick exactly one option.'
+  },
+  checkbox: { 
+    label: 'Multiple Choice', 
+    icon: CheckSquare, 
+    color: 'bg-purple-50 border-purple-200',
+    description: 'User can pick multiple options. Complex logic support.'
+  },
+  end: { 
+    label: 'End Point', 
+    icon: Flag, 
+    color: 'bg-red-50 border-red-200',
+    description: 'Finishes the flow. Optional restart.'
+  },
+};
+
+// --- Utils ---
+
+const getLayoutedElements = (nodes: AppNode[], edges: Edge[]) => {
+  const dagreGraph = new dagre.graphlib.Graph();
+  dagreGraph.setDefaultEdgeLabel(() => ({}));
+
+  const isHorizontal = true;
+  dagreGraph.setGraph({ rankdir: isHorizontal ? 'LR' : 'TB' });
+
+  nodes.forEach((node) => {
+    dagreGraph.setNode(node.id, { width: 300, height: 150 }); // Estimate size
+  });
+
+  edges.forEach((edge) => {
+    dagreGraph.setEdge(edge.source, edge.target);
+  });
+
+  dagre.layout(dagreGraph);
+
+  const layoutedNodes = nodes.map((node) => {
+    const nodeWithPosition = dagreGraph.node(node.id);
+    return {
+      ...node,
+      position: {
+        x: nodeWithPosition.x - 150,
+        y: nodeWithPosition.y - 75,
+      },
+    };
+  });
+
+  return { nodes: layoutedNodes, edges };
+};
+
+const isFlowData = (value: unknown): value is FlowData => {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<FlowData>;
+  return Array.isArray(candidate.nodes) && Array.isArray(candidate.edges);
+};
+
+// --- Custom Node Components (Editor) ---
+
+const NodeHeader = ({ type, label }: { type: NodeType; label: string }) => {
+  const Icon = NODE_TYPES_CONFIG[type].icon;
+  const isDarkMode = useContext(ThemeModeContext);
+  return (
+    <div className={`flex items-center gap-2 mb-2 pb-2 border-b ${isDarkMode ? 'border-slate-700/80' : 'border-gray-200/50'}`}>
+      <Icon size={14} className={isDarkMode ? 'text-slate-300' : 'text-gray-600'} />
+      <span className={`text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-200' : 'text-gray-700'}`}>{label}</span>
+    </div>
+  );
+};
+
+const StaticNodeComponent = ({ data, id }: { data: NodeData; id: string }) => {
+  const isDarkMode = useContext(ThemeModeContext);
+  return (
+  <div className={`p-4 rounded-lg w-[280px] text-sm h-full ${isDarkMode ? 'bg-slate-900 border border-slate-700' : ''}`}>
+    {id !== 'start' && <Handle type="target" position={Position.Left} className="!bg-gray-400" />}
+    <NodeHeader type="static" label={data.label} />
+    <p className={isDarkMode ? 'text-slate-100 line-clamp-3' : 'text-gray-800 line-clamp-3'}>{data.content}</p>
+    <Handle type="source" position={Position.Right} className="!bg-blue-500" />
+  </div>
+  );
+};
+
+const EndNodeComponent = ({ data }: { data: NodeData }) => {
+  const isDarkMode = useContext(ThemeModeContext);
+  return (
+  <div className={`p-4 rounded-lg w-[280px] text-sm h-full ${isDarkMode ? 'bg-red-950/20 border border-red-900/40' : 'bg-red-50/50'}`}>
+    <Handle type="target" position={Position.Left} className="!bg-gray-400" />
+    <NodeHeader type="end" label={data.label} />
+    <p className={isDarkMode ? 'text-slate-100 mb-2' : 'text-gray-800 mb-2'}>{data.content}</p>
+    {data.canRestart && <div className={isDarkMode ? 'text-xs text-blue-300 font-medium' : 'text-xs text-blue-700 font-medium'}>↺ Can Restart</div>}
+  </div>
+  );
+};
+
+const RadioNodeComponent = ({ data }: { data: NodeData }) => {
+  const isDarkMode = useContext(ThemeModeContext);
+  return (
+  <div className={`p-4 rounded-lg w-[300px] text-sm relative h-full ${isDarkMode ? 'bg-blue-950/20 border border-blue-900/40' : 'bg-blue-50/50'}`}>
+    <Handle type="target" position={Position.Left} className="!bg-gray-400" />
+    <NodeHeader type="radio" label={data.label} />
+    <p className={isDarkMode ? 'text-slate-100 mb-3 italic' : 'text-gray-800 mb-3 italic'}>{data.content}</p>
+    <div className="space-y-2">
+      {data.options?.map((opt, idx) => (
+        <div key={opt.id} className={`relative flex items-center justify-between p-2 rounded ${isDarkMode ? 'bg-slate-900 border border-blue-900/50 text-slate-100' : 'bg-white border border-blue-100 text-gray-800'}`}>
+          <span>{opt.label}</span>
+          <Handle
+            type="source"
+            position={Position.Right}
+            id={opt.id}
+            style={{ top: '50%', right: '-24px' }}
+            className="!bg-blue-500"
+          />
+        </div>
+      ))}
+      {(!data.options || data.options.length === 0) && <div className="text-red-600 text-xs font-medium">No options defined</div>}
+    </div>
+  </div>
+  );
+};
+
+const CheckboxNodeComponent = ({ data }: { data: NodeData }) => {
+  const isDarkMode = useContext(ThemeModeContext);
+  return (
+  <div className={`p-4 rounded-lg w-[320px] text-sm h-full ${isDarkMode ? 'bg-purple-950/20 border border-purple-900/40' : 'bg-purple-50/50'}`}>
+    <Handle type="target" position={Position.Left} className="!bg-gray-400" />
+    <NodeHeader type="checkbox" label={data.label} />
+    <p className={isDarkMode ? 'text-slate-100 mb-3 italic' : 'text-gray-800 mb-3 italic'}>{data.content}</p>
+    
+    <div className={isDarkMode ? 'mb-2 text-xs font-bold text-purple-200' : 'mb-2 text-xs font-bold text-purple-900'}>Available Options:</div>
+    <div className="flex flex-wrap gap-1 mb-4">
+      {data.options?.map(opt => (
+        <span key={opt.id} className={`px-2 py-1 rounded text-xs ${isDarkMode ? 'bg-slate-900 border border-purple-900/50 text-slate-100' : 'bg-white border border-purple-100 text-gray-800'}`}>{opt.label}</span>
+      ))}
+    </div>
+
+    <div className={isDarkMode ? 'mb-2 text-xs font-bold text-purple-200' : 'mb-2 text-xs font-bold text-purple-900'}>Logic Paths (Outputs):</div>
+    <div className="space-y-2">
+      {data.paths?.map((path) => (
+        <div key={path.id} className={`relative flex items-center justify-between p-2 rounded ${isDarkMode ? 'bg-slate-900 border border-purple-900/50 text-slate-100' : 'bg-white border border-purple-100 text-gray-800'}`}>
+          <div className="flex flex-col">
+             <span className="font-medium">{path.label}</span>
+             <span className={isDarkMode ? 'text-xs text-slate-400 mt-0.5' : 'text-xs text-gray-600 mt-0.5'}>
+               Requires: {path.requiredOptionIds.length > 0 
+                  ? path.requiredOptionIds.map(id => data.options?.find(o => o.id === id)?.label || '???').join(' + ') 
+                  : '(Any/Else)'}
+             </span>
+          </div>
+          <Handle
+            type="source"
+            position={Position.Right}
+            id={path.id}
+            style={{ top: '50%', right: '-24px' }}
+            className="!bg-purple-500"
+          />
+        </div>
+      ))}
+    </div>
+  </div>
+  );
+};
+
+const nodeTypes = {
+  radio: RadioNodeComponent,
+  checkbox: CheckboxNodeComponent,
+  static: StaticNodeComponent,
+  end: EndNodeComponent,
+};
+
+// --- Property Panel (Editor) ---
+
+const PropertiesPanel = ({ selectedNode, updateNode }: { selectedNode: AppNode | null, updateNode: (id: string, data: Partial<NodeData>) => void }) => {
+  const isDarkMode = useContext(ThemeModeContext);
+  if (!selectedNode) return (
+    <div className={`w-80 border-l p-4 flex flex-col items-center justify-center text-center ${isDarkMode ? 'border-slate-700 bg-slate-900 text-slate-400' : 'border-gray-200 bg-gray-100 text-gray-500'}`}>
+      <Settings size={48} className="mb-4 opacity-30" />
+      <p>Select a node to edit properties</p>
+    </div>
+  );
+
+  const { data, id } = selectedNode;
+
+  const addOption = () => {
+    const newOpt = { id: `opt-${Date.now()}`, label: 'New Option' };
+    const currentOpts = data.options || [];
+    updateNode(id, { options: [...currentOpts, newOpt] });
+  };
+
+  const updateOption = (optId: string, label: string) => {
+    const currentOpts = data.options || [];
+    updateNode(id, { options: currentOpts.map(o => o.id === optId ? { ...o, label } : o) });
+  };
+
+  const removeOption = (optId: string) => {
+    const currentOpts = data.options || [];
+    updateNode(id, { options: currentOpts.filter(o => o.id !== optId) });
+  };
+
+  const addPath = () => {
+    const newPath: LogicPath = { id: `path-${Date.now()}`, label: 'New Path', requiredOptionIds: [] };
+    const currentPaths = data.paths || [];
+    updateNode(id, { paths: [...currentPaths, newPath] });
+  };
+
+  const updatePath = (pathId: string, updates: Partial<LogicPath>) => {
+    const currentPaths = data.paths || [];
+    updateNode(id, { paths: currentPaths.map(p => p.id === pathId ? { ...p, ...updates } : p) });
+  };
+
+  const removePath = (pathId: string) => {
+    const currentPaths = data.paths || [];
+    updateNode(id, { paths: currentPaths.filter(p => p.id !== pathId) });
+  };
+
+  return (
+    <div className={`w-80 border-l flex flex-col h-full overflow-hidden ${isDarkMode ? 'border-slate-700 bg-slate-900' : 'border-gray-200 bg-gray-100'}`}>
+      <div className={`p-4 border-b font-semibold flex justify-between items-center ${isDarkMode ? 'border-slate-700 bg-slate-800 text-slate-100' : 'bg-gray-300 text-gray-800'}`}>
+        <span>Edit Node</span>
+        <span className={`text-xs px-2 py-1 rounded uppercase ${isDarkMode ? 'bg-slate-700 text-slate-200' : 'bg-white/60 text-gray-700'}`}>{data.type}</span>
+      </div>
+      
+      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+        {/* Basic Info */}
+        <div className="space-y-3">
+          <label className={`block text-sm font-bold ${isDarkMode ? 'text-slate-100' : 'text-gray-800'}`}>Label (Internal)</label>
+          <input 
+            className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none ${isDarkMode ? 'text-slate-100 bg-slate-800 border-slate-600' : 'text-gray-900 bg-white border-gray-300'}`} 
+            value={data.label} 
+            onChange={(e) => updateNode(id, { label: e.target.value })}
+          />
+          
+          <label className={`block text-sm font-bold ${isDarkMode ? 'text-slate-100' : 'text-gray-800'}`}>Content / Question</label>
+          <textarea 
+            className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none min-h-[100px] ${isDarkMode ? 'text-slate-100 bg-slate-800 border-slate-600' : 'text-gray-900 bg-white border-gray-300'}`} 
+            value={data.content} 
+            onChange={(e) => updateNode(id, { content: e.target.value })}
+          />
+        </div>
+
+        {/* Options (Radio/Checkbox) */}
+        {(data.type === 'radio' || data.type === 'checkbox') && (
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <label className={`text-sm font-bold ${isDarkMode ? 'text-slate-100' : 'text-gray-800'}`}>Options</label>
+              <button onClick={addOption} className={`text-xs flex items-center gap-1 font-semibold ${isDarkMode ? 'text-blue-300 hover:text-blue-200' : 'text-blue-700 hover:text-blue-900'}`}>
+                <Plus size={12} /> Add
+              </button>
+            </div>
+            <div className="space-y-2">
+              {data.options?.map(opt => (
+                <div key={opt.id} className="flex gap-2">
+                  <input 
+                    className={`flex-1 p-1.5 text-sm border rounded ${isDarkMode ? 'text-slate-100 bg-slate-800 border-slate-600' : 'text-gray-900 bg-white border-gray-300'}`}
+                    value={opt.label}
+                    onChange={(e) => updateOption(opt.id, e.target.value)}
+                  />
+                  <button onClick={() => removeOption(opt.id)} className="text-red-500 hover:text-red-700">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Checkbox Paths */}
+        {data.type === 'checkbox' && (
+          <div className={`space-y-3 border-t pt-4 ${isDarkMode ? 'border-slate-700' : 'border-gray-300'}`}>
+             <div className="flex justify-between items-center">
+              <label className={`text-sm font-bold ${isDarkMode ? 'text-slate-100' : 'text-gray-800'}`}>Output Paths</label>
+              <button onClick={addPath} className={`text-xs flex items-center gap-1 font-semibold ${isDarkMode ? 'text-purple-300 hover:text-purple-200' : 'text-purple-700 hover:text-purple-900'}`}>
+                <Plus size={12} /> Add Path
+              </button>
+            </div>
+            <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-600'}`}>Define which combination of selected options leads to which path. The system checks specific matches first.</p>
+            <div className="space-y-4">
+              {data.paths?.map(path => (
+                <div key={path.id} className={`p-3 rounded border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'}`}>
+                  <div className="flex justify-between mb-2">
+                     <input 
+                        className={`flex-1 p-1 text-xs border rounded font-medium ${isDarkMode ? 'bg-slate-700 border-slate-600 text-slate-100' : 'bg-gray-50 border-gray-300 text-gray-900'}`}
+                        value={path.label}
+                        onChange={(e) => updatePath(path.id, { label: e.target.value })}
+                        placeholder="Path Name"
+                      />
+                     <button onClick={() => removePath(path.id)} className="ml-2 text-red-500 hover:text-red-700">
+                        <Trash2 size={12} />
+                      </button>
+                  </div>
+                  <div className="space-y-1">
+                    <p className={`text-[10px] uppercase font-bold ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>Requires (AND)</p>
+                    {data.options?.map(opt => (
+                      <label key={opt.id} className={`flex items-center gap-2 text-xs ${isDarkMode ? 'text-slate-200' : 'text-gray-800'}`}>
+                        <input 
+                          type="checkbox"
+                          checked={path.requiredOptionIds.includes(opt.id)}
+                          onChange={(e) => {
+                            const newReqs = e.target.checked 
+                              ? [...path.requiredOptionIds, opt.id]
+                              : path.requiredOptionIds.filter(rid => rid !== opt.id);
+                            updatePath(path.id, { requiredOptionIds: newReqs });
+                          }}
+                        />
+                        {opt.label}
+                      </label>
+                    ))}
+                    {path.requiredOptionIds.length === 0 && (
+                      <div className={`text-[10px] italic ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>No constraints = Default/Else path</div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* End Node */}
+        {data.type === 'end' && (
+          <div className="flex items-center gap-2">
+            <input 
+              type="checkbox" 
+              id="canRestart"
+              checked={data.canRestart || false}
+              onChange={(e) => updateNode(id, { canRestart: e.target.checked })}
+            />
+            <label htmlFor="canRestart" className={`text-sm font-medium ${isDarkMode ? 'text-slate-100' : 'text-gray-800'}`}>Allow Restart</label>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// --- Viewer Component ---
+
+const Viewer = ({ 
+  nodes, 
+  edges, 
+  onExit,
+  isDarkMode,
+}: { 
+  nodes: AppNode[], 
+  edges: Edge[], 
+  onExit: () => void,
+  isDarkMode: boolean,
+}) => {
+  const [history, setHistory] = useState<string[]>([]);
+  const [currentNodeId, setCurrentNodeId] = useState<string>('start');
+  const [selections, setSelections] = useState<string[]>([]); // Current node selections (option IDs)
+
+  const currentNode = nodes.find(n => n.id === currentNodeId);
+
+  // Incoming nodes (parents) - Purely based on graph topology
+  const prevNodes = useMemo(() => {
+    const incomingEdgeIds = edges.filter(e => e.target === currentNodeId).map(e => e.source);
+    const uniqueSources = Array.from(new Set(incomingEdgeIds));
+    return uniqueSources.map(id => nodes.find(n => n.id === id)).filter(Boolean) as AppNode[];
+  }, [currentNodeId, edges, nodes]);
+
+  // Outgoing nodes (children) - Purely based on graph topology
+  const nextNodes = useMemo(() => {
+    const outgoingEdgeTargets = edges.filter(e => e.source === currentNodeId).map(e => e.target);
+    const uniqueTargets = Array.from(new Set(outgoingEdgeTargets));
+    return uniqueTargets.map(id => nodes.find(n => n.id === id)).filter(Boolean) as AppNode[];
+  }, [currentNodeId, edges, nodes]);
+
+  const handleBack = () => {
+    if (history.length === 0) return;
+    const newHistory = [...history];
+    const prevId = newHistory.pop();
+    setHistory(newHistory);
+    if (prevId) {
+      setCurrentNodeId(prevId);
+      setSelections([]);
+    }
+  };
+
+  const handleContinue = () => {
+    if (!currentNode) return;
+
+    if (currentNode.data.type === 'end') {
+      if (currentNode.data.canRestart) {
+        setHistory([]);
+        setCurrentNodeId('start');
+        setSelections([]);
+      }
+      return;
+    }
+
+    let nextEdge: Edge | undefined;
+
+    if (currentNode.data.type === 'static') {
+      nextEdge = edges.find(e => e.source === currentNodeId);
+    } else if (currentNode.data.type === 'radio') {
+      const selectedOptionId = selections[0];
+      nextEdge = edges.find(e => e.source === currentNodeId && e.sourceHandle === selectedOptionId);
+    } else if (currentNode.data.type === 'checkbox') {
+      const paths = currentNode.data.paths || [];
+
+      const sortedPaths = [...paths].sort((a, b) => {
+        const lenDiff = b.requiredOptionIds.length - a.requiredOptionIds.length;
+        if (lenDiff !== 0) return lenDiff;
+        return a.label.localeCompare(b.label);
+      });
+
+      const matchedPath = sortedPaths.find(path => path.requiredOptionIds.every(req => selections.includes(req)));
+
+      if (matchedPath) {
+        nextEdge = edges.find(e => e.source === currentNodeId && e.sourceHandle === matchedPath.id);
+      }
+    }
+
+    if (nextEdge) {
+      const targetNode = nodes.find(n => n.id === nextEdge!.target);
+      if (targetNode) {
+        setHistory([...history, currentNodeId]);
+        setCurrentNodeId(nextEdge.target);
+        setSelections([]);
+      } else {
+        alert('Configuration Error: The next node is missing.');
+      }
+    } else {
+      alert('No valid path defined for this selection.');
+    }
+  };
+
+  const toggleSelection = (optId: string, isRadio: boolean) => {
+    if (isRadio) {
+      setSelections([optId]);
+    } else {
+      setSelections(prev => 
+        prev.includes(optId) ? prev.filter(id => id !== optId) : [...prev, optId]
+      );
+    }
+  };
+
+  if (!currentNode) return <div>Node not found</div>;
+
+  return (
+    <div className={`fixed inset-0 z-50 flex flex-col ${isDarkMode ? 'bg-slate-950' : 'bg-slate-50'}`}>
+      <div className={`h-16 border-b flex items-center px-6 justify-between shrink-0 ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white'}`}>
+        <h2 className={`font-bold ${isDarkMode ? 'text-slate-100' : 'text-gray-800'}`}>Preview Mode</h2>
+        <button onClick={onExit} className={`flex items-center gap-2 ${isDarkMode ? 'text-slate-300 hover:text-red-400' : 'text-gray-600 hover:text-red-600'}`}>
+          <Flag size={18} /> Exit
+        </button>
+      </div>
+
+      <div className="flex-1 flex items-center justify-center p-8 overflow-hidden relative">
+        <div className="absolute inset-0 pointer-events-none opacity-20 flex items-center justify-center">
+          {prevNodes.length > 0 && <div className={`w-[300px] h-[2px] absolute left-[25%] ${isDarkMode ? 'bg-slate-600' : 'bg-slate-400'}`}></div>}
+          {nextNodes.length > 0 && <div className={`w-[300px] h-[2px] absolute right-[25%] ${isDarkMode ? 'bg-slate-600' : 'bg-slate-400'}`}></div>}
+        </div>
+
+        <div className="w-full max-w-[90vw] grid grid-cols-3 gap-48 items-center h-full relative z-10">
+          <div className="flex flex-col items-end justify-center gap-4 opacity-80 transition-all duration-500">
+            {prevNodes.length === 0 && <div className={`text-sm font-medium ${isDarkMode ? 'text-slate-500' : 'text-gray-500'}`}>Start of flow</div>}
+            {prevNodes.map(node => (
+              <div key={node.id} className={`p-4 rounded-lg border w-64 text-right shadow-sm ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-300'}`}>
+                <div className={`text-xs uppercase font-bold mb-1 ${isDarkMode ? 'text-slate-400' : 'text-gray-600'}`}>{node.data.label}</div>
+                <div className={`text-sm line-clamp-2 ${isDarkMode ? 'text-slate-100' : 'text-gray-900'}`}>{node.data.content}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-col items-center justify-center z-20">
+            <div className={`w-[450px] rounded-xl shadow-2xl border overflow-hidden flex flex-col transition-all duration-500 transform scale-100 ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-200'}`}>
+              <div className={`h-2 w-full ${NODE_TYPES_CONFIG[currentNode.data.type].color.split(' ')[0].replace('bg-', 'bg-')}`} />
+              <div className="p-8">
+                <div className={`flex items-center gap-2 mb-4 text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                  {NODE_TYPES_CONFIG[currentNode.data.type].label}
+                </div>
+
+                <h1 className={`text-2xl font-bold mb-6 leading-relaxed ${isDarkMode ? 'text-slate-100' : 'text-gray-900'}`}>
+                  {currentNode.data.content}
+                </h1>
+
+                {currentNode.data.type === 'radio' && (
+                  <div className="space-y-3 mb-8">
+                    {currentNode.data.options?.map(opt => (
+                      <button
+                        key={opt.id}
+                        onClick={() => toggleSelection(opt.id, true)}
+                        className={`w-full text-left p-3 rounded-lg border-2 transition-all ${
+                          selections.includes(opt.id)
+                            ? 'border-blue-500 bg-blue-500/10 text-blue-300'
+                            : isDarkMode
+                              ? 'border-slate-700 bg-slate-800 text-slate-200 hover:border-slate-500'
+                              : 'border-gray-200 hover:border-blue-400 hover:bg-blue-50 text-gray-800'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {currentNode.data.type === 'checkbox' && (
+                  <div className="space-y-3 mb-8">
+                    {currentNode.data.options?.map(opt => (
+                      <button
+                        key={opt.id}
+                        onClick={() => toggleSelection(opt.id, false)}
+                        className={`w-full text-left p-3 rounded-lg border-2 transition-all ${
+                          selections.includes(opt.id)
+                            ? 'border-purple-500 bg-purple-500/10 text-purple-300'
+                            : isDarkMode
+                              ? 'border-slate-700 bg-slate-800 text-slate-200 hover:border-slate-500'
+                              : 'border-gray-200 hover:border-purple-400 hover:bg-purple-50 text-gray-800'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {currentNode.data.type === 'end' && (
+                  <div className={`mb-8 p-4 rounded-lg border ${isDarkMode ? 'bg-green-950/20 border-green-900/50 text-green-300' : 'bg-green-50 border-green-200 text-green-800'}`}>
+                    <Check size={18} className="inline mr-2" /> End of flow reached
+                  </div>
+                )}
+
+                <div className="flex gap-3 mt-4">
+                  {history.length > 0 && (
+                    <button
+                      onClick={handleBack}
+                      className={`flex-1 py-3 px-4 rounded-lg border-2 font-bold flex items-center justify-center gap-2 ${isDarkMode ? 'border-slate-600 text-slate-100 hover:bg-slate-800' : 'border-gray-300 text-gray-800 hover:bg-gray-100'}`}
+                    >
+                      <ArrowLeft size={18} /> Back
+                    </button>
+                  )}
+
+                  {currentNode.data.type !== 'end' ? (
+                    <button
+                      onClick={handleContinue}
+                      disabled={currentNode.data.type !== 'static' && selections.length === 0}
+                      className="flex-[2] py-3 px-4 rounded-lg bg-blue-600 font-semibold text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      Continue <ChevronRight size={18} />
+                    </button>
+                  ) : (
+                    currentNode.data.canRestart && (
+                      <button
+                        onClick={handleContinue}
+                        className="flex-[2] py-3 px-4 rounded-lg bg-green-600 font-semibold text-white hover:bg-green-700 flex items-center justify-center gap-2"
+                      >
+                        <RotateCcw size={18} /> Restart
+                      </button>
+                    )
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col items-start justify-center gap-4 opacity-80 transition-all duration-500">
+            {nextNodes.length === 0 && currentNode.data.type !== 'end' && <div className={`text-sm font-medium ${isDarkMode ? 'text-slate-500' : 'text-gray-500'}`}>End of path</div>}
+            {nextNodes.map(node => (
+              <div key={node.id} className={`p-4 rounded-lg border w-64 shadow-sm ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-300'}`}>
+                <div className={`text-xs uppercase font-bold mb-1 ${isDarkMode ? 'text-slate-400' : 'text-gray-600'}`}>{node.data.label}</div>
+                <div className={`text-sm line-clamp-2 ${isDarkMode ? 'text-slate-100' : 'text-gray-900'}`}>{node.data.content}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- Main App Component ---
+
+const DraggableToolboxItem = ({ type }: { type: NodeType }) => {
+  const config = NODE_TYPES_CONFIG[type];
+  const Icon = config.icon;
+  
+  return (
+    <div 
+      className="group relative"
+      onDragStart={(event) => event.dataTransfer.setData('application/reactflow', type)}
+      draggable
+    >
+      <div className="p-2 text-gray-600 hover:bg-blue-50 hover:text-blue-600 rounded cursor-grab transition-colors flex items-center justify-center">
+        <Icon size={24} />
+      </div>
+      
+      {/* Tooltip */}
+      <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 bg-gray-800 text-white text-xs p-2 rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 text-center">
+        <div className="font-bold mb-1">{config.label}</div>
+        <div className="text-gray-300">{config.description}</div>
+        <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-800 rotate-45"></div>
+      </div>
+    </div>
+  );
+};
+
+interface GitHubFile {
+  name: string;
+  download_url: string;
+  type: 'file' | 'dir';
+}
+
+const App = () => {
+  const [nodes, setNodes, onNodesChange] = useNodesState<AppNode>(INITIAL_NODES);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [mode, setMode] = useState<FlowMode>('editor');
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const edgeColor = isDarkMode ? '#94a3b8' : '#475569';
+  const defaultEdgeOptions = useMemo(() => ({
+    animated: false,
+    style: { stroke: edgeColor, strokeWidth: 2 },
+    markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor },
+  }), [edgeColor]);
+
+  // Modal State
+  const [showUrlModal, setShowUrlModal] = useState(false);
+  const [importUrl, setImportUrl] = useState('');
+
+  // Catalog State
+  const [isCatalogOpen, setIsCatalogOpen] = useState(false);
+  const [activeFolder, setActiveFolder] = useState<CatalogFolderConfig | null>(null);
+  const [repoFiles, setRepoFiles] = useState<GitHubFile[]>([]);
+  const [loadingCatalog, setLoadingCatalog] = useState(false);
+
+  const { deleteElements, screenToFlowPosition } = useReactFlow<AppNode>();
+
+  // Selection state for global delete
+  const [selectedElements, setSelectedElements] = useState<{ nodes: AppNode[], edges: Edge[] }>({ nodes: [], edges: [] });
+
+  useOnSelectionChange({
+    onChange: ({ nodes, edges }) => {
+      setSelectedElements({ nodes: nodes as AppNode[], edges });
+      // Logic for Properties Panel selection
+      if (nodes.length === 1) {
+        setSelectedNodeId(nodes[0].id);
+      } else if (nodes.length === 0) {
+        setSelectedNodeId(null);
+      }
+    },
+  });
+
+  // Global Delete Handler
+  useEffect(() => {
+    const storedTheme = localStorage.getItem('flowbuilder-theme');
+    if (storedTheme) {
+      setIsDarkMode(storedTheme === 'dark');
+      return;
+    }
+
+    setIsDarkMode(window.matchMedia('(prefers-color-scheme: dark)').matches);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('flowbuilder-theme', isDarkMode ? 'dark' : 'light');
+  }, [isDarkMode]);
+
+  useEffect(() => {
+    setEdges((eds) =>
+      eds.map((edge) => ({
+        ...edge,
+        style: { ...(edge.style || {}), stroke: edgeColor, strokeWidth: 2 },
+        markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor },
+      })),
+    );
+  }, [edgeColor, setEdges]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Allow default behavior for inputs
+      if (
+        event.target instanceof HTMLInputElement || 
+        event.target instanceof HTMLTextAreaElement || 
+        (event.target as HTMLElement).isContentEditable
+      ) {
+        return;
+      }
+
+      if (['Delete', 'Backspace'].includes(event.key)) {
+        if (selectedElements.nodes.length > 0 || selectedElements.edges.length > 0) {
+          deleteElements({ nodes: selectedElements.nodes, edges: selectedElements.edges });
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [deleteElements, selectedElements]);
+
+  const selectedNode = useMemo(() => nodes.find(n => n.id === selectedNodeId) || null, [nodes, selectedNodeId]);
+
+  const onConnect = useCallback(
+    (params: Connection) => setEdges((eds) => addEdge({
+      ...params,
+      style: { stroke: edgeColor, strokeWidth: 2 },
+      markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor },
+    }, eds)),
+    [edgeColor, setEdges],
+  );
+
+  const onDragOver = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+  }, []);
+
+  const onDrop = useCallback(
+    (event: React.DragEvent) => {
+      event.preventDefault();
+
+      const type = event.dataTransfer.getData('application/reactflow') as NodeType;
+      if (typeof type === 'undefined' || !type) return;
+
+      const position = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+
+      const newNode: AppNode = {
+        id: `node-${Date.now()}`,
+        type,
+        position,
+        data: { 
+          label: `New ${NODE_TYPES_CONFIG[type].label}`, 
+          content: 'Click to edit content...', 
+          type,
+          options: [],
+          paths: []
+        },
+      };
+
+      setNodes((nds) => nds.concat(newNode));
+    },
+    [setNodes, screenToFlowPosition],
+  );
+
+  const updateNode = (id: string, newData: Partial<NodeData>) => {
+    setNodes((nds) => nds.map(n => n.id === id ? { ...n, data: { ...n.data, ...newData } } : n));
+  };
+
+  const handleLayout = () => {
+    const layouted = getLayoutedElements(nodes, edges);
+    setNodes([...layouted.nodes]);
+    setEdges([...layouted.edges]);
+  };
+
+  const handleSave = () => {
+    const data = JSON.stringify({ nodes, edges });
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'flowchart.json';
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const loadFlowData = (data: unknown) => {
+    if (isFlowData(data)) {
+      setNodes(data.nodes);
+      setEdges(data.edges);
+      return true;
+    }
+    return false;
+  };
+
+  const handleLoad = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const result = JSON.parse(event.target?.result as string);
+        if (!loadFlowData(result)) {
+           alert('Invalid JSON file');
+        }
+      } catch {
+        alert('Invalid JSON file');
+      } finally {
+        e.target.value = '';
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleImportFromUrl = () => {
+    setShowUrlModal(true);
+  };
+
+  const executeUrlImport = async (url: string) => {
+    if (!url) return;
+    let urlToFetch = url.trim();
+
+    // Fix common user error: Using GitHub blob link instead of raw
+    if (urlToFetch.includes('github.com') && urlToFetch.includes('/blob/')) {
+      urlToFetch = urlToFetch.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/');
+    }
+
+    try {
+      const res = await fetch(urlToFetch);
+      if (!res.ok) throw new Error(`Status ${res.status}`);
+      const data = await res.json();
+      
+      if (loadFlowData(data)) {
+        return true;
+      } else {
+        alert('Invalid flowchart JSON structure.');
+        return false;
+      }
+    } catch (error: unknown) {
+      const appError = error as AppErrorLike;
+      console.error(error);
+      const errorMessage = appError.message ?? 'Unknown error';
+      const isCors =
+        appError.name === 'TypeError' &&
+        (errorMessage === 'Failed to fetch' || errorMessage.includes('NetworkError'));
+      let msg = `Import Failed: ${errorMessage}`;
+      if (isCors) msg = `Network Error (CORS). ensure "raw" link used.`;
+      alert(msg);
+      return false;
+    }
+  };
+  
+  // Catalog Handlers
+  const fetchFolderContents = async (folder: CatalogFolderConfig) => {
+    setActiveFolder(folder);
+    setLoadingCatalog(true);
+    setRepoFiles([]);
+    
+    try {
+      const url = `https://api.github.com/repos/${folder.owner}/${folder.repo}/contents/${folder.path}`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+           // Filter for json files
+           const files = data.filter(
+             (item: GitHubFile) => item.type === 'file' && item.name.endsWith('.json'),
+           );
+           setRepoFiles(files);
+        } else {
+           setRepoFiles([]);
+           alert('Unexpected response from GitHub.');
+        }
+      } else {
+        alert('Failed to load folder. Check configuration or rate limits.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Network error fetching catalog.');
+    } finally {
+      setLoadingCatalog(false);
+    }
+  };
+
+  const loadCatalogFile = async (file: GitHubFile) => {
+    setLoadingCatalog(true);
+    const success = await executeUrlImport(file.download_url);
+    setLoadingCatalog(false);
+    if (success) {
+      setIsCatalogOpen(false); // Close sidebar on success
+    }
+  };
+
+  return (
+    <div className={`w-screen h-screen flex flex-col overflow-hidden relative transition-colors ${isDarkMode ? 'bg-slate-950' : 'bg-gray-50'}`}>
+      
+      {/* Top Bar */}
+      <header className={`h-16 border-b flex items-center justify-between px-6 shadow-sm z-20 relative shrink-0 transition-colors ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-200'}`}>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white font-bold">F</div>
+            <h1 className={`font-bold hidden sm:block ${isDarkMode ? 'text-slate-100' : 'text-gray-900'}`}>FlowBuilder</h1>
+          </div>
+          
+          <button 
+             onClick={() => setIsCatalogOpen(!isCatalogOpen)}
+             className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+               isCatalogOpen
+                 ? 'bg-blue-100 text-blue-700'
+                 : isDarkMode
+                   ? 'bg-slate-800 text-slate-100 hover:bg-slate-700'
+                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+             }`}
+          >
+             <Book size={16} /> Catalog
+          </button>
+        </div>
+
+        {/* Toolbox Area */}
+        <div className="flex items-center justify-center gap-4 mx-4 flex-1">
+          <div className={`rounded-lg p-1 flex items-center gap-2 border transition-colors ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-gray-100 border-gray-200'}`}>
+             <DraggableToolboxItem type="static" />
+             <DraggableToolboxItem type="radio" />
+             <DraggableToolboxItem type="checkbox" />
+             <DraggableToolboxItem type="end" />
+          </div>
+          <span className={`text-xs font-medium hidden lg:inline ${isDarkMode ? 'text-slate-400' : 'text-gray-400'}`}>Drag items to canvas</span>
+        </div>
+        
+        {/* Actions */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsDarkMode(prev => !prev)}
+            title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            className={`p-2 rounded text-sm flex gap-1 font-medium transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-100'}`}
+          >
+            {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+          <button onClick={handleLayout} title="Auto Layout" className={`p-2 rounded text-sm flex gap-1 font-medium transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-100'}`}>
+             <Layout size={18} />
+          </button>
+          <div className={`h-6 w-px mx-1 ${isDarkMode ? 'bg-slate-600' : 'bg-gray-300'}`}></div>
+          <label title="Import from File" className={`p-2 rounded cursor-pointer text-sm flex gap-1 items-center font-medium transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-100'}`}>
+            <Upload size={18} />
+            <input type="file" accept=".json" onChange={handleLoad} className="hidden" />
+          </label>
+          <button onClick={handleImportFromUrl} title="Import from URL" className={`p-2 rounded text-sm flex gap-1 items-center font-medium transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-100'}`}>
+            <LinkIcon size={18} />
+          </button>
+          <button onClick={handleSave} title="Save" className={`p-2 rounded text-sm flex gap-1 items-center font-medium transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-100'}`}>
+            <Save size={18} />
+          </button>
+          <div className={`h-6 w-px mx-1 ${isDarkMode ? 'bg-slate-600' : 'bg-gray-300'}`}></div>
+          <button 
+            onClick={() => setMode('viewer')} 
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 shadow-sm font-medium transition-colors"
+          >
+            <Play size={16} /> <span className="hidden sm:inline">Run Flow</span>
+          </button>
+        </div>
+      </header>
+
+      {/* Catalog Sidebar */}
+      <div 
+        className={`absolute top-16 left-0 bottom-0 shadow-xl border-r z-30 transition-all duration-300 ease-in-out flex flex-col ${isCatalogOpen ? 'w-80 translate-x-0' : 'w-80 -translate-x-full'} ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-200'}`}
+      >
+        <div className={`p-4 border-b flex justify-between items-center ${isDarkMode ? 'border-slate-700 bg-slate-900' : 'border-gray-100 bg-gray-50'}`}>
+           <h3 className={`font-bold flex items-center gap-2 ${isDarkMode ? 'text-slate-100' : 'text-gray-800'}`}>
+             {activeFolder ? (
+               <button onClick={() => setActiveFolder(null)} className={`p-1 rounded ${isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-gray-200'}`}><ArrowLeft size={16}/></button>
+             ) : <Book size={18}/>} 
+             {activeFolder ? activeFolder.name : 'Catalog Folders'}
+           </h3>
+           <button onClick={() => setIsCatalogOpen(false)}><X size={18} className={isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-gray-400 hover:text-gray-600'}/></button>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-4">
+          {loadingCatalog ? (
+            <div className={`flex flex-col items-center justify-center h-40 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+               <Loader2 className="animate-spin mb-2" />
+               <span className="text-xs">Loading contents...</span>
+            </div>
+          ) : (
+             <>
+               {/* Folder List View */}
+               {!activeFolder && (
+                 <div className="space-y-2">
+                   {CATALOG_FOLDERS.map(folder => (
+                     <div 
+                        key={folder.id} 
+                        onClick={() => fetchFolderContents(folder)}
+                        className={`p-3 rounded border cursor-pointer transition-colors flex items-center gap-3 group ${isDarkMode ? 'border-slate-700 hover:border-blue-400 hover:bg-slate-800' : 'border-gray-200 hover:border-blue-400 hover:bg-blue-50'}`}
+                      >
+                        <div className="p-2 bg-blue-100 text-blue-600 rounded group-hover:bg-blue-200">
+                           <Folder size={20} />
+                        </div>
+                        <div>
+                          <div className={`font-semibold text-sm ${isDarkMode ? 'text-slate-100' : 'text-gray-800'}`}>{folder.name}</div>
+                          <div className={`text-xs truncate max-w-[160px] ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>{folder.owner}/{folder.repo}</div>
+                        </div>
+                        <ChevronRight size={16} className={`ml-auto group-hover:text-blue-500 ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}/>
+                     </div>
+                   ))}
+                 </div>
+               )}
+
+               {/* File List View */}
+               {activeFolder && (
+                 <div className="space-y-2">
+                    {repoFiles.length === 0 ? (
+                      <div className={`text-center text-sm py-8 italic ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>No .json files found in this folder.</div>
+                    ) : (
+                      repoFiles.map(file => (
+                        <div 
+                          key={file.name}
+                          onClick={() => loadCatalogFile(file)}
+                          className={`p-3 rounded border hover:border-green-400 cursor-pointer transition-colors flex items-center gap-3 group ${isDarkMode ? 'border-slate-700 hover:bg-slate-800' : 'border-gray-200 hover:bg-green-50'}`}
+                        >
+                          <div className="p-2 bg-green-100 text-green-600 rounded group-hover:bg-green-200">
+                             <FileJson size={20} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                             <div className={`font-semibold text-sm truncate ${isDarkMode ? 'text-slate-100' : 'text-gray-800'}`}>{file.name}</div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                 </div>
+               )}
+             </>
+          )}
+        </div>
+        <div className={`p-3 border-t text-[10px] text-center ${isDarkMode ? 'bg-slate-900 border-slate-700 text-slate-500' : 'bg-gray-50 border-gray-200 text-gray-500'}`}>
+           Edit CATALOG_FOLDERS in index.tsx to add your own repos.
+        </div>
+      </div>
+
+      {/* Editor Body */}
+      <ThemeModeContext.Provider value={isDarkMode}>
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* Canvas */}
+        <div className={`flex-1 h-full relative transition-colors ${isDarkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
+          <ReactFlow<AppNode>
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onDrop={onDrop}
+            onDragOver={onDragOver}
+            onPaneClick={() => setSelectedNodeId(null)}
+            nodeTypes={nodeTypes}
+            colorMode={isDarkMode ? 'dark' : 'light'}
+            defaultEdgeOptions={defaultEdgeOptions}
+            fitView
+            snapToGrid
+            deleteKeyCode={['Backspace', 'Delete']}
+          >
+            <Background color={isDarkMode ? '#334155' : '#cbd5e1'} gap={20} />
+            <Controls />
+            <MiniMap className={isDarkMode ? 'bg-slate-800 border border-slate-600 rounded shadow-lg' : 'bg-white border rounded shadow-lg'} zoomable pannable />
+          </ReactFlow>
+        </div>
+
+        {/* Properties Panel */}
+        {selectedNodeId && (
+          <PropertiesPanel selectedNode={selectedNode} updateNode={updateNode} />
+        )}
+      </div>
+      </ThemeModeContext.Provider>
+
+      {/* URL Import Modal */}
+      {showUrlModal && (
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h3 className="font-bold text-gray-800">Import from URL</h3>
+              <button onClick={() => setShowUrlModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6">
+              <p className="text-sm text-gray-600 mb-3">
+                Enter a direct link to a raw JSON file containing the flowchart data.
+              </p>
+              <input
+                type="text"
+                className="w-full p-3 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-gray-800 text-sm mb-4"
+                placeholder="https://example.com/flowchart.json"
+                value={importUrl}
+                onChange={(e) => setImportUrl(e.target.value)}
+                autoFocus
+              />
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setShowUrlModal(false)}
+                  className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded text-sm font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    executeUrlImport(importUrl).then(success => {
+                       if(success) { setShowUrlModal(false); setImportUrl(''); }
+                    });
+                  }}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium"
+                >
+                  Import
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Viewer Overlay */}
+      {mode === 'viewer' && (
+        <Viewer nodes={nodes} edges={edges} onExit={() => setMode('editor')} isDarkMode={isDarkMode} />
+      )}
+    </div>
+  );
+};
+
+export default App;
