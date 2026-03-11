@@ -111,16 +111,6 @@ const App = () => {
   }, [isDarkMode]);
 
   useEffect(() => {
-    setEdges((eds) =>
-      eds.map((edge) => ({
-        ...edge,
-        style: { ...(edge.style || {}), stroke: edgeColor, strokeWidth: 2 },
-        markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor },
-      })),
-    );
-  }, [edgeColor, setEdges]);
-
-  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       // Allow default behavior for inputs
       if (
@@ -145,12 +135,8 @@ const App = () => {
   const selectedNode = useMemo(() => nodes.find(n => n.id === selectedNodeId) || null, [nodes, selectedNodeId]);
 
   const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => addEdge({
-      ...params,
-      style: { stroke: edgeColor, strokeWidth: 2 },
-      markerEnd: { type: MarkerType.ArrowClosed, color: edgeColor },
-    } as Edge, eds)),
-    [edgeColor, setEdges],
+    (params: Connection) => setEdges((eds) => addEdge(params as Edge, eds)),
+    [setEdges],
   );
 
   const onDragOver = useCallback((event: React.DragEvent) => {

@@ -19,21 +19,53 @@ const Viewer = ({
   const [currentNodeId, setCurrentNodeId] = useState<string>('start');
   const [selections, setSelections] = useState<string[]>([]); // Current node selections (option IDs)
 
-  const currentNode = nodes.find(n => n.id === currentNodeId);
+  const nodesById = useMemo(() => {
+    const map = new Map<string, AppNode>();
+    nodes.forEach((node) => map.set(node.id, node));
+    return map;
+  }, [nodes]);
+
+  const { incomingByTarget, outgoingBySource } = useMemo(() => {
+    const incoming = new Map<string, string[]>();
+    const outgoing = new Map<string, string[]>();
+
+    edges.forEach((edge) => {
+      const incomingSources = incoming.get(edge.target) || [];
+      incomingSources.push(edge.source);
+      incoming.set(edge.target, incomingSources);
+
+      const outgoingTargets = outgoing.get(edge.source) || [];
+      outgoingTargets.push(edge.target);
+      outgoing.set(edge.source, outgoingTargets);
+    });
+
+    return {
+      incomingByTarget: incoming,
+      outgoingBySource: outgoing,
+    };
+  }, [edges]);
+
+  const currentNode = nodesById.get(currentNodeId);
 
   // Incoming nodes (parents) - Purely based on graph topology
   const prevNodes = useMemo(() => {
-    const incomingEdgeIds = edges.filter(e => e.target === currentNodeId).map(e => e.source);
-    const uniqueSources = Array.from(new Set(incomingEdgeIds));
-    return uniqueSources.map(id => nodes.find(n => n.id === id)).filter(Boolean) as AppNode[];
-  }, [currentNodeId, edges, nodes]);
+    const incomingSources = incomingByTarget.get(currentNodeId) || [];
+    const uniqueSources = Array.from(new Set(incomingSources));
+
+    return uniqueSources
+      .map((id) => nodesById.get(id))
+      .filter(Boolean) as AppNode[];
+  }, [currentNodeId, incomingByTarget, nodesById]);
 
   // Outgoing nodes (children) - Purely based on graph topology
   const nextNodes = useMemo(() => {
-    const outgoingEdgeTargets = edges.filter(e => e.source === currentNodeId).map(e => e.target);
-    const uniqueTargets = Array.from(new Set(outgoingEdgeTargets));
-    return uniqueTargets.map(id => nodes.find(n => n.id === id)).filter(Boolean) as AppNode[];
-  }, [currentNodeId, edges, nodes]);
+    const outgoingTargets = outgoingBySource.get(currentNodeId) || [];
+    const uniqueTargets = Array.from(new Set(outgoingTargets));
+
+    return uniqueTargets
+      .map((id) => nodesById.get(id))
+      .filter(Boolean) as AppNode[];
+  }, [currentNodeId, outgoingBySource, nodesById]);
 
   const handleBack = () => {
     if (history.length === 0) return;
@@ -82,7 +114,7 @@ const Viewer = ({
     }
 
     if (nextEdge) {
-      const targetNode = nodes.find(n => n.id === nextEdge!.target);
+      const targetNode = nodesById.get(nextEdge.target);
       if (targetNode) {
         setHistory([...history, currentNodeId]);
         setCurrentNodeId(nextEdge.target);
