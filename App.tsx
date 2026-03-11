@@ -143,6 +143,11 @@ const App = () => {
     [setEdges],
   );
 
+
+  const handleNodeClick = useCallback((_: React.MouseEvent, node: AppNode) => {
+    setSelectedNodeId(node.id);
+  }, []);
+
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
@@ -585,6 +590,7 @@ const App = () => {
             onDrop={onDrop}
             onDragOver={onDragOver}
             onPaneClick={() => setSelectedNodeId(null)}
+            onNodeClick={handleNodeClick}
             nodeTypes={nodeTypes}
             colorMode={isDarkMode ? 'dark' : 'light'}
             defaultEdgeOptions={defaultEdgeOptions}
@@ -599,7 +605,7 @@ const App = () => {
         </div>
 
         {/* Properties Panel */}
-        {selectedNodeId && (
+        {selectedNode && (
           <PropertiesPanel selectedNode={selectedNode} updateNode={updateNode} />
         )}
       </div>
