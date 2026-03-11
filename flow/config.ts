@@ -38,20 +38,19 @@ export const NODE_TYPES_CONFIG = {
   radio: { 
     label: 'Single Choice', 
     icon: Circle, 
-    color: 'bg-blue-50 border-blue-200',
+    color: 'bg-gray-50 border-gray-200',
     description: 'User must pick exactly one option.'
   },
   checkbox: { 
     label: 'Multiple Choice', 
     icon: CheckSquare, 
-    color: 'bg-purple-50 border-purple-200',
+    color: 'bg-gray-50 border-gray-200',
     description: 'User can pick multiple options. Complex logic support.'
   },
   end: { 
     label: 'End Point', 
     icon: Flag, 
-    color: 'bg-red-50 border-red-200',
+    color: 'bg-gray-50 border-gray-200',
     description: 'Finishes the flow. Optional restart.'
   },
 };
-

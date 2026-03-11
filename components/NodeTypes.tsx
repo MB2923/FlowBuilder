@@ -17,7 +17,7 @@ const NodeHeader = ({ type, label }: { type: NodeType; label: string }) => {
 const StaticNodeComponent = ({ data, id }: { data: NodeData; id: string }) => {
   const isDarkMode = useContext(ThemeModeContext);
   return (
-  <div className={`p-4 rounded-lg w-[280px] text-sm h-full ${isDarkMode ? 'bg-slate-900 border border-slate-700' : ''}`}>
+  <div className={`p-4 rounded-lg w-[280px] text-sm h-full ${isDarkMode ? 'bg-slate-900 border border-slate-700' : 'bg-gray-50 border border-gray-200'}`}>
     {id !== 'start' && <Handle type="target" position={Position.Left} className="!bg-gray-400" />}
     <NodeHeader type="static" label={data.label} />
     <p className={isDarkMode ? 'text-slate-100 line-clamp-3' : 'text-gray-800 line-clamp-3'}>{data.content}</p>
@@ -29,7 +29,7 @@ const StaticNodeComponent = ({ data, id }: { data: NodeData; id: string }) => {
 const EndNodeComponent = ({ data }: { data: NodeData }) => {
   const isDarkMode = useContext(ThemeModeContext);
   return (
-  <div className={`p-4 rounded-lg w-[280px] text-sm h-full ${isDarkMode ? 'bg-red-950/20 border border-red-900/40' : 'bg-red-50/50'}`}>
+  <div className={`p-4 rounded-lg w-[280px] text-sm h-full ${isDarkMode ? 'bg-slate-900 border border-slate-700' : 'bg-gray-50 border border-gray-200'}`}>
     <Handle type="target" position={Position.Left} className="!bg-gray-400" />
     <NodeHeader type="end" label={data.label} />
     <p className={isDarkMode ? 'text-slate-100 mb-2' : 'text-gray-800 mb-2'}>{data.content}</p>
@@ -41,13 +41,13 @@ const EndNodeComponent = ({ data }: { data: NodeData }) => {
 const RadioNodeComponent = ({ data }: { data: NodeData }) => {
   const isDarkMode = useContext(ThemeModeContext);
   return (
-  <div className={`p-4 rounded-lg w-[300px] text-sm relative h-full ${isDarkMode ? 'bg-blue-950/20 border border-blue-900/40' : 'bg-blue-50/50'}`}>
+  <div className={`p-4 rounded-lg w-[300px] text-sm relative h-full ${isDarkMode ? 'bg-slate-900 border border-slate-700' : 'bg-gray-50 border border-gray-200'}`}>
     <Handle type="target" position={Position.Left} className="!bg-gray-400" />
     <NodeHeader type="radio" label={data.label} />
     <p className={isDarkMode ? 'text-slate-100 mb-3 italic' : 'text-gray-800 mb-3 italic'}>{data.content}</p>
     <div className="space-y-2">
       {data.options?.map((opt, idx) => (
-        <div key={opt.id} className={`relative flex items-center justify-between p-2 rounded ${isDarkMode ? 'bg-slate-900 border border-blue-900/50 text-slate-100' : 'bg-white border border-blue-100 text-gray-800'}`}>
+        <div key={opt.id} className={`relative flex items-center justify-between p-2 rounded ${isDarkMode ? 'bg-slate-900 border border-slate-700 text-slate-100' : 'bg-white border border-gray-200 text-gray-800'}`}>
           <span>{opt.label}</span>
           <Handle
             type="source"
@@ -67,22 +67,22 @@ const RadioNodeComponent = ({ data }: { data: NodeData }) => {
 const CheckboxNodeComponent = ({ data }: { data: NodeData }) => {
   const isDarkMode = useContext(ThemeModeContext);
   return (
-  <div className={`p-4 rounded-lg w-[320px] text-sm h-full ${isDarkMode ? 'bg-purple-950/20 border border-purple-900/40' : 'bg-purple-50/50'}`}>
+  <div className={`p-4 rounded-lg w-[320px] text-sm h-full ${isDarkMode ? 'bg-slate-900 border border-slate-700' : 'bg-gray-50 border border-gray-200'}`}>
     <Handle type="target" position={Position.Left} className="!bg-gray-400" />
     <NodeHeader type="checkbox" label={data.label} />
     <p className={isDarkMode ? 'text-slate-100 mb-3 italic' : 'text-gray-800 mb-3 italic'}>{data.content}</p>
     
-    <div className={isDarkMode ? 'mb-2 text-xs font-bold text-purple-200' : 'mb-2 text-xs font-bold text-purple-900'}>Available Options:</div>
+    <div className={isDarkMode ? 'mb-2 text-xs font-bold text-slate-200' : 'mb-2 text-xs font-bold text-gray-700'}>Available Options:</div>
     <div className="flex flex-wrap gap-1 mb-4">
       {data.options?.map(opt => (
-        <span key={opt.id} className={`px-2 py-1 rounded text-xs ${isDarkMode ? 'bg-slate-900 border border-purple-900/50 text-slate-100' : 'bg-white border border-purple-100 text-gray-800'}`}>{opt.label}</span>
+        <span key={opt.id} className={`px-2 py-1 rounded text-xs ${isDarkMode ? 'bg-slate-900 border border-slate-700 text-slate-100' : 'bg-white border border-gray-200 text-gray-800'}`}>{opt.label}</span>
       ))}
     </div>
 
-    <div className={isDarkMode ? 'mb-2 text-xs font-bold text-purple-200' : 'mb-2 text-xs font-bold text-purple-900'}>Logic Paths (Outputs):</div>
+    <div className={isDarkMode ? 'mb-2 text-xs font-bold text-slate-200' : 'mb-2 text-xs font-bold text-gray-700'}>Logic Paths (Outputs):</div>
     <div className="space-y-2">
       {data.paths?.map((path) => (
-        <div key={path.id} className={`relative flex items-center justify-between p-2 rounded ${isDarkMode ? 'bg-slate-900 border border-purple-900/50 text-slate-100' : 'bg-white border border-purple-100 text-gray-800'}`}>
+        <div key={path.id} className={`relative flex items-center justify-between p-2 rounded ${isDarkMode ? 'bg-slate-900 border border-slate-700 text-slate-100' : 'bg-white border border-gray-200 text-gray-800'}`}>
           <div className="flex flex-col">
              <span className="font-medium">{path.label}</span>
              <span className={isDarkMode ? 'text-xs text-slate-400 mt-0.5' : 'text-xs text-gray-600 mt-0.5'}>
@@ -96,7 +96,7 @@ const CheckboxNodeComponent = ({ data }: { data: NodeData }) => {
             position={Position.Right}
             id={path.id}
             style={{ top: '50%', right: '-24px' }}
-            className="!bg-purple-500"
+            className="!bg-blue-500"
           />
         </div>
       ))}
