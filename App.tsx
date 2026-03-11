@@ -13,7 +13,7 @@ import {
   useReactFlow,
   useOnSelectionChange,
 } from '@xyflow/react';
-import { ArrowLeft, Book, ChevronRight, FileJson, Folder, Layout, Link as LinkIcon, Loader2, Moon, Play, Redo2, Save, Sun, Undo2, Upload, X } from 'lucide-react';
+import { ArrowLeft, Book, ChevronRight, FileJson, Folder, Layout, Link as LinkIcon, Loader2, Moon, Play, Redo2, Save, Share2, Sun, Undo2, Upload, X } from 'lucide-react';
 import { DraggableToolboxItem } from './components/DraggableToolboxItem';
 import { nodeTypes } from './components/NodeTypes';
 import { PropertiesPanel } from './components/PropertiesPanel';
@@ -560,7 +560,7 @@ const App = () => {
             <LinkIcon size={18} />
           </button>
           <button onClick={handleCopyShareLink} title="Copy share link" className={`p-2 rounded text-sm flex gap-1 items-center font-medium transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-100'}`}>
-            <LinkIcon size={18} />
+            <Share2 size={18} />
           </button>
           <button onClick={handleSave} title="Save" className={`p-2 rounded text-sm flex gap-1 items-center font-medium transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-100'}`}>
             <Save size={18} />
