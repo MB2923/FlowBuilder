@@ -68,6 +68,7 @@ export interface NodeData {
 export type AppNode = Node<NodeData>;
 
 export const ThemeModeContext = createContext(false);
+export const LanguageContext = createContext<'en' | 'ru'>('en');
 
 export interface FlowData {
   nodes: AppNode[];

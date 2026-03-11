@@ -1,9 +1,11 @@
 import React from 'react';
 import { NODE_TYPES_CONFIG } from '../flow/config';
+import { NODE_TYPE_TEXT, Language } from '../flow/i18n';
 import { NodeType } from '../flow/types';
 
-const DraggableToolboxItem = ({ type }: { type: NodeType }) => {
+const DraggableToolboxItem = ({ type, language }: { type: NodeType; language: Language }) => {
   const config = NODE_TYPES_CONFIG[type];
+  const text = NODE_TYPE_TEXT[language][type];
   const Icon = config.icon;
   
   return (
@@ -16,10 +18,9 @@ const DraggableToolboxItem = ({ type }: { type: NodeType }) => {
         <Icon size={24} />
       </div>
       
-      {/* Tooltip */}
       <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 bg-gray-800 text-white text-xs p-2 rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 text-center">
-        <div className="font-bold mb-1">{config.label}</div>
-        <div className="text-gray-300">{config.description}</div>
+        <div className="font-bold mb-1">{text.label}</div>
+        <div className="text-gray-300">{text.description}</div>
         <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-800 rotate-45"></div>
       </div>
     </div>

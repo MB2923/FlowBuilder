@@ -13,12 +13,13 @@ import {
   useReactFlow,
   useOnSelectionChange,
 } from '@xyflow/react';
-import { ArrowLeft, Book, ChevronRight, FileJson, Folder, Layout, Link as LinkIcon, Loader2, Moon, Play, Redo2, Save, Share2, Sun, Undo2, Upload, X } from 'lucide-react';
+import { ArrowLeft, Book, ChevronRight, FileJson, Folder, Layout, Link as LinkIcon, Loader2, Moon, Play, Redo2, Save, Settings, Share2, Sun, Undo2, Upload, X } from 'lucide-react';
 import { DraggableToolboxItem } from './components/DraggableToolboxItem';
 import { nodeTypes } from './components/NodeTypes';
 import { PropertiesPanel } from './components/PropertiesPanel';
 import { CATALOG_FOLDERS, INITIAL_NODES, NODE_TYPES_CONFIG } from './flow/config';
-import { AppErrorLike, AppNode, CatalogFolderConfig, FlowMode, NodeData, NodeType, ThemeModeContext } from './flow/types';
+import { AppErrorLike, AppNode, CatalogFolderConfig, FlowMode, LanguageContext, NodeData, NodeType, ThemeModeContext } from './flow/types';
+import { Language, NODE_TYPE_TEXT } from './flow/i18n';
 import { getLayoutedElements, isFlowData } from './flow/utils';
 
 const Viewer = lazy(() => import('./components/Viewer').then((module) => ({ default: module.Viewer })));
@@ -58,6 +59,7 @@ interface GitHubFile {
 
 
 const DRAFT_STORAGE_KEY = 'flowbuilder-draft-v1';
+const LANG_STORAGE_KEY = 'flowbuilder-language';
 const MAX_HISTORY_SIZE = 100;
 const FLOW_URL_PARAM = 'flowUrl';
 const FLOW_DATA_PARAM = 'flowData';
@@ -85,6 +87,8 @@ const App = () => {
   const [mode, setMode] = useState<FlowMode>('editor');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [language, setLanguage] = useState<Language>('en');
+  const [showSettings, setShowSettings] = useState(false);
   const edgeColor = isDarkMode ? '#94a3b8' : '#475569';
   const defaultEdgeOptions = useMemo(() => ({
     animated: false,
@@ -127,6 +131,10 @@ const App = () => {
   // Global Delete Handler
   useEffect(() => {
     const storedTheme = localStorage.getItem('flowbuilder-theme');
+    const storedLanguage = localStorage.getItem(LANG_STORAGE_KEY);
+    if (storedLanguage === 'ru' || storedLanguage === 'en') {
+      setLanguage(storedLanguage);
+    }
     if (storedTheme) {
       setIsDarkMode(storedTheme === 'dark');
       return;
@@ -138,6 +146,10 @@ const App = () => {
   useEffect(() => {
     localStorage.setItem('flowbuilder-theme', isDarkMode ? 'dark' : 'light');
   }, [isDarkMode]);
+
+  useEffect(() => {
+    localStorage.setItem(LANG_STORAGE_KEY, language);
+  }, [language]);
 
   const selectedNode = useMemo(() => nodes.find(n => n.id === selectedNodeId) || null, [nodes, selectedNodeId]);
 
@@ -191,7 +203,7 @@ const App = () => {
         type,
         position,
         data: {
-          label: `New ${NODE_TYPES_CONFIG[type].label}`,
+          label: `${language === 'ru' ? 'Новый' : 'New'} ${NODE_TYPE_TEXT[language][type].label}`,
           content: 'Click to edit content...',
           type,
           options: [],
@@ -210,7 +222,7 @@ const App = () => {
 
       setNodes((nds) => nds.concat(newNode));
     },
-    [setNodes, screenToFlowPosition],
+    [language, setNodes, screenToFlowPosition],
   );
 
   const updateNode = (id: string, newData: Partial<NodeData>) => {
@@ -508,37 +520,53 @@ const App = () => {
                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
              }`}
           >
-             <Book size={16} /> Catalog
+             <Book size={16} /> {language === 'ru' ? 'Каталог' : 'Catalog'}
           </button>
         </div>
 
         {/* Toolbox Area */}
         <div className="flex items-center justify-center gap-4 mx-4 flex-1">
           <div className={`rounded-lg p-1 flex items-center gap-2 border transition-colors ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-gray-100 border-gray-200'}`}>
-             <DraggableToolboxItem type="static" />
-             <DraggableToolboxItem type="radio" />
-             <DraggableToolboxItem type="checkbox" />
-             <DraggableToolboxItem type="end" />
+             <DraggableToolboxItem type="static" language={language} />
+             <DraggableToolboxItem type="radio" language={language} />
+             <DraggableToolboxItem type="checkbox" language={language} />
+             <DraggableToolboxItem type="end" language={language} />
           </div>
-          <span className={`text-xs font-medium hidden lg:inline ${isDarkMode ? 'text-slate-400' : 'text-gray-400'}`}>Drag items to canvas</span>
+          <span className={`text-xs font-medium hidden lg:inline ${isDarkMode ? 'text-slate-400' : 'text-gray-400'}`}>{language === 'ru' ? 'Перетащите элементы на холст' : 'Drag items to canvas'}</span>
         </div>
         
         {/* Actions */}
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => setIsDarkMode(prev => !prev)}
-            title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-            className={`p-2 rounded text-sm flex gap-1 font-medium transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-100'}`}
-          >
-            {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
-          <button onClick={handleLayout} title="Auto Layout" className={`p-2 rounded text-sm flex gap-1 font-medium transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-100'}`}>
+          <div className="relative">
+            <button
+              onClick={() => setShowSettings((prev) => !prev)}
+              title={language === 'ru' ? 'Настройки' : 'Settings'}
+              className={`p-2 rounded text-sm flex gap-1 font-medium transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-100'}`}
+            >
+              <Settings size={18} />
+            </button>
+            {showSettings && (
+              <div className={`absolute right-0 mt-2 w-56 rounded-lg border shadow-lg p-3 z-50 ${isDarkMode ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-white border-gray-200 text-gray-800'}`}>
+                <div className="text-xs mb-2 font-semibold">{language === 'ru' ? 'Тема' : 'Theme'}</div>
+                <button onClick={() => setIsDarkMode((prev) => !prev)} className={`w-full mb-3 px-3 py-2 rounded flex items-center gap-2 ${isDarkMode ? 'bg-slate-800 hover:bg-slate-700' : 'bg-gray-100 hover:bg-gray-200'}`}>
+                  {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
+                  {isDarkMode ? (language === 'ru' ? 'Светлая тема' : 'Light mode') : (language === 'ru' ? 'Тёмная тема' : 'Dark mode')}
+                </button>
+                <div className="text-xs mb-2 font-semibold">{language === 'ru' ? 'Язык' : 'Language'}</div>
+                <select value={language} onChange={(e) => setLanguage(e.target.value as Language)} className={`w-full px-2 py-2 text-sm rounded border ${isDarkMode ? 'bg-slate-800 border-slate-600' : 'bg-white border-gray-300'}`}>
+                  <option value="en">English</option>
+                  <option value="ru">Русский</option>
+                </select>
+              </div>
+            )}
+          </div>
+          <button onClick={handleLayout} title={language === 'ru' ? 'Авто-компоновка' : 'Auto Layout'} className={`p-2 rounded text-sm flex gap-1 font-medium transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-100'}`}>
              <Layout size={18} />
           </button>
           <button
             onClick={handleUndo}
             disabled={historyIndex === 0}
-            title="Undo"
+            title={language === 'ru' ? 'Отменить' : 'Undo'}
             className={`p-2 rounded text-sm flex gap-1 font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${isDarkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-100'}`}
           >
             <Undo2 size={18} />
@@ -546,23 +574,23 @@ const App = () => {
           <button
             onClick={handleRedo}
             disabled={historyIndex >= history.length - 1}
-            title="Redo"
+            title={language === 'ru' ? 'Повторить' : 'Redo'}
             className={`p-2 rounded text-sm flex gap-1 font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${isDarkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-100'}`}
           >
             <Redo2 size={18} />
           </button>
           <div className={`h-6 w-px mx-1 ${isDarkMode ? 'bg-slate-600' : 'bg-gray-300'}`}></div>
-          <label title="Import from File" className={`p-2 rounded cursor-pointer text-sm flex gap-1 items-center font-medium transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-100'}`}>
+          <label title={language === 'ru' ? 'Импорт из файла' : 'Import from File'} className={`p-2 rounded cursor-pointer text-sm flex gap-1 items-center font-medium transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-100'}`}>
             <Upload size={18} />
             <input type="file" accept=".json" onChange={handleLoad} className="hidden" />
           </label>
-          <button onClick={handleImportFromUrl} title="Import from URL" className={`p-2 rounded text-sm flex gap-1 items-center font-medium transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-100'}`}>
+          <button onClick={handleImportFromUrl} title={language === 'ru' ? 'Импорт по ссылке' : 'Import from URL'} className={`p-2 rounded text-sm flex gap-1 items-center font-medium transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-100'}`}>
             <LinkIcon size={18} />
           </button>
-          <button onClick={handleCopyShareLink} title="Copy share link" className={`p-2 rounded text-sm flex gap-1 items-center font-medium transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-100'}`}>
+          <button onClick={handleCopyShareLink} title={language === 'ru' ? 'Скопировать ссылку' : 'Copy share link'} className={`p-2 rounded text-sm flex gap-1 items-center font-medium transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-100'}`}>
             <Share2 size={18} />
           </button>
-          <button onClick={handleSave} title="Save" className={`p-2 rounded text-sm flex gap-1 items-center font-medium transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-100'}`}>
+          <button onClick={handleSave} title={language === 'ru' ? 'Сохранить' : 'Save'} className={`p-2 rounded text-sm flex gap-1 items-center font-medium transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-800' : 'text-gray-700 hover:bg-gray-100'}`}>
             <Save size={18} />
           </button>
           <div className={`h-6 w-px mx-1 ${isDarkMode ? 'bg-slate-600' : 'bg-gray-300'}`}></div>
@@ -570,7 +598,7 @@ const App = () => {
             onClick={() => setMode('viewer')} 
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 shadow-sm font-medium transition-colors"
           >
-            <Play size={16} /> <span className="hidden sm:inline">Run Flow</span>
+            <Play size={16} /> <span className="hidden sm:inline">{language === 'ru' ? 'Запустить' : 'Run Flow'}</span>
           </button>
         </div>
       </header>
@@ -584,7 +612,7 @@ const App = () => {
              {activeFolder ? (
                <button onClick={() => setActiveFolder(null)} className={`p-1 rounded ${isDarkMode ? 'hover:bg-slate-700' : 'hover:bg-gray-200'}`}><ArrowLeft size={16}/></button>
              ) : <Book size={18}/>} 
-             {activeFolder ? activeFolder.name : 'Catalog Folders'}
+             {activeFolder ? activeFolder.name : language === 'ru' ? 'Папки каталога' : 'Catalog Folders'}
            </h3>
            <button onClick={() => setIsCatalogOpen(false)}><X size={18} className={isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-gray-400 hover:text-gray-600'}/></button>
         </div>
@@ -593,7 +621,7 @@ const App = () => {
           {loadingCatalog ? (
             <div className={`flex flex-col items-center justify-center h-40 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
                <Loader2 className="animate-spin mb-2" />
-               <span className="text-xs">Loading contents...</span>
+               <span className="text-xs">{language === 'ru' ? 'Загрузка содержимого...' : 'Loading contents...'}</span>
             </div>
           ) : (
              <>
@@ -623,7 +651,7 @@ const App = () => {
                {activeFolder && (
                  <div className="space-y-2">
                     {repoFiles.length === 0 ? (
-                      <div className={`text-center text-sm py-8 italic ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>No .json files found in this folder.</div>
+                      <div className={`text-center text-sm py-8 italic ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>{language === 'ru' ? 'В этой папке не найдено .json файлов.' : 'No .json files found in this folder.'}</div>
                     ) : (
                       repoFiles.map(file => (
                         <div 
@@ -646,12 +674,13 @@ const App = () => {
           )}
         </div>
         <div className={`p-3 border-t text-[10px] text-center ${isDarkMode ? 'bg-slate-900 border-slate-700 text-slate-500' : 'bg-gray-50 border-gray-200 text-gray-500'}`}>
-           Edit CATALOG_FOLDERS in index.tsx to add your own repos.
+           {language === 'ru' ? 'Измените CATALOG_FOLDERS в index.tsx, чтобы добавить свои репозитории.' : 'Edit CATALOG_FOLDERS in index.tsx to add your own repos.'}
         </div>
       </div>
 
       {/* Editor Body */}
       <ThemeModeContext.Provider value={isDarkMode}>
+      <LanguageContext.Provider value={language}>
       <div className="flex-1 flex overflow-hidden relative">
         {/* Canvas */}
         <div className={`flex-1 h-full relative transition-colors ${isDarkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
@@ -680,9 +709,10 @@ const App = () => {
 
         {/* Properties Panel */}
         {selectedNode && (
-          <PropertiesPanel selectedNode={selectedNode} updateNode={updateNode} />
+          <PropertiesPanel selectedNode={selectedNode} updateNode={updateNode} language={language} />
         )}
       </div>
+      </LanguageContext.Provider>
       </ThemeModeContext.Provider>
 
       {/* URL Import Modal */}
@@ -690,14 +720,14 @@ const App = () => {
         <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-              <h3 className="font-bold text-gray-800">Import from URL</h3>
+              <h3 className="font-bold text-gray-800">{language === 'ru' ? 'Импорт по ссылке' : 'Import from URL'}</h3>
               <button onClick={() => setShowUrlModal(false)} className="text-gray-400 hover:text-gray-600">
                 <X size={20} />
               </button>
             </div>
             <div className="p-6">
               <p className="text-sm text-gray-600 mb-3">
-                Enter a direct link to a raw JSON file containing the flowchart data.
+                {language === 'ru' ? 'Введите прямую ссылку на raw JSON файл со схемой.' : 'Enter a direct link to a raw JSON file containing the flowchart data.'}
               </p>
               <input
                 type="text"
@@ -712,7 +742,7 @@ const App = () => {
                   onClick={() => setShowUrlModal(false)}
                   className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded text-sm font-medium"
                 >
-                  Cancel
+                  {language === 'ru' ? 'Отмена' : 'Cancel'}
                 </button>
                 <button
                   onClick={() => {
@@ -722,7 +752,7 @@ const App = () => {
                   }}
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium"
                 >
-                  Import
+                  {language === 'ru' ? 'Импорт' : 'Import'}
                 </button>
               </div>
             </div>
@@ -737,7 +767,7 @@ const App = () => {
             <Loader2 className="w-6 h-6 animate-spin" />
           </div>
         }>
-          <Viewer nodes={nodes} edges={edges} onExit={() => setMode('editor')} isDarkMode={isDarkMode} />
+          <Viewer nodes={nodes} edges={edges} onExit={() => setMode('editor')} isDarkMode={isDarkMode} language={language} />
         </Suspense>
       )}
     </div>

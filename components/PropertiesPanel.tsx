@@ -1,6 +1,7 @@
 import React, { useContext } from 'react';
 import { Plus, Settings, Trash2 } from 'lucide-react';
 import { AdditionalContentBlock, AppNode, LogicPath, NodeData, TableCell, ThemeModeContext } from '../flow/types';
+import { Language } from '../flow/i18n';
 
 const defaultFeatures = {
   enableTitleHint: true,
@@ -10,12 +11,12 @@ const defaultFeatures = {
   enableCopyButton: true,
 };
 
-const PropertiesPanel = ({ selectedNode, updateNode }: { selectedNode: AppNode | null, updateNode: (id: string, data: Partial<NodeData>) => void }) => {
+const PropertiesPanel = ({ selectedNode, updateNode, language }: { selectedNode: AppNode | null, updateNode: (id: string, data: Partial<NodeData>) => void, language: Language }) => {
   const isDarkMode = useContext(ThemeModeContext);
   if (!selectedNode) return (
     <div className={`w-80 border-l p-4 flex flex-col items-center justify-center text-center ${isDarkMode ? 'border-slate-700 bg-slate-900 text-slate-400' : 'border-gray-200 bg-gray-100 text-gray-500'}`}>
       <Settings size={48} className="mb-4 opacity-30" />
-      <p>Select a node to edit properties</p>
+      <p>{language === 'ru' ? 'Выберите узел для редактирования свойств' : 'Select a node to edit properties'}</p>
     </div>
   );
 
@@ -23,7 +24,7 @@ const PropertiesPanel = ({ selectedNode, updateNode }: { selectedNode: AppNode |
   const features = { ...defaultFeatures, ...(data.features || {}) };
 
   const addOption = () => {
-    const newOpt = { id: `opt-${Date.now()}`, label: 'New Option' };
+    const newOpt = { id: `opt-${Date.now()}`, label: language === 'ru' ? 'Новый вариант' : 'New Option' };
     const currentOpts = data.options || [];
     updateNode(id, { options: [...currentOpts, newOpt] });
   };
@@ -39,7 +40,7 @@ const PropertiesPanel = ({ selectedNode, updateNode }: { selectedNode: AppNode |
   };
 
   const addPath = () => {
-    const newPath: LogicPath = { id: `path-${Date.now()}`, label: 'New Path', requiredOptionIds: [] };
+    const newPath: LogicPath = { id: `path-${Date.now()}`, label: language === 'ru' ? 'Новый путь' : 'New Path', requiredOptionIds: [] };
     const currentPaths = data.paths || [];
     updateNode(id, { paths: [...currentPaths, newPath] });
   };
@@ -57,9 +58,9 @@ const PropertiesPanel = ({ selectedNode, updateNode }: { selectedNode: AppNode |
   const addContentBlock = (type: AdditionalContentBlock['type']) => {
     const current = data.additionalContent || [];
     const defaults: Record<AdditionalContentBlock['type'], AdditionalContentBlock> = {
-      link: { id: `cnt-${Date.now()}`, type: 'link', title: 'Ссылка', url: 'https://example.com' },
-      image: { id: `cnt-${Date.now()}`, type: 'image', title: 'Изображение', url: 'https://placehold.co/600x300' },
-      table: { id: `cnt-${Date.now()}`, type: 'table', title: 'Таблица', markdown: '| Параметр | Значение |\n|---|---|\n| A | 1 |' },
+      link: { id: `cnt-${Date.now()}`, type: 'link', title: language === 'ru' ? 'Ссылка' : 'Link', url: 'https://example.com' },
+      image: { id: `cnt-${Date.now()}`, type: 'image', title: language === 'ru' ? 'Изображение' : 'Image', url: 'https://placehold.co/600x300' },
+      table: { id: `cnt-${Date.now()}`, type: 'table', title: language === 'ru' ? 'Таблица' : 'Table', markdown: language === 'ru' ? '| Параметр | Значение |\n|---|---|\n| A | 1 |' : '| Parameter | Value |\n|---|---|\n| A | 1 |' },
     };
     updateNode(id, { additionalContent: [...current, defaults[type]] });
   };
@@ -87,7 +88,7 @@ const PropertiesPanel = ({ selectedNode, updateNode }: { selectedNode: AppNode |
 
   const addCell = (isLegend = false) => {
     const tableConfig = data.tableConfig || { columns: 2, cells: [] };
-    const newCell: TableCell = { id: `cell-${Date.now()}`, label: isLegend ? 'Legend' : 'Option Cell', isLegend };
+    const newCell: TableCell = { id: `cell-${Date.now()}`, label: isLegend ? language === 'ru' ? 'Легенда' : 'Legend' : language === 'ru' ? 'Ячейка варианта' : 'Option Cell', isLegend };
     if (!isLegend && data.options?.[0]) {
       newCell.optionId = data.options[0].id;
       newCell.label = data.options[0].label;
@@ -107,13 +108,13 @@ const PropertiesPanel = ({ selectedNode, updateNode }: { selectedNode: AppNode |
   return (
     <div className={`w-80 border-l flex flex-col h-full overflow-hidden ${isDarkMode ? 'border-slate-700 bg-slate-900' : 'border-gray-200 bg-gray-100'}`}>
       <div className={`p-4 border-b font-semibold flex justify-between items-center ${isDarkMode ? 'border-slate-700 bg-slate-800 text-slate-100' : 'bg-gray-300 text-gray-800'}`}>
-        <span>Edit Node</span>
+        <span>{language === 'ru' ? 'Редактирование узла' : 'Edit Node'}</span>
         <span className={`text-xs px-2 py-1 rounded uppercase ${isDarkMode ? 'bg-slate-700 text-slate-200' : 'bg-white/60 text-gray-700'}`}>{data.type}</span>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
         <div className="space-y-3">
-          <label className={`block text-sm font-bold ${isDarkMode ? 'text-slate-100' : 'text-gray-800'}`}>Label (Internal)</label>
+          <label className={`block text-sm font-bold ${isDarkMode ? 'text-slate-100' : 'text-gray-800'}`}>{language === 'ru' ? 'Метка (внутренняя)' : 'Label (Internal)'}</label>
           <input className={`w-full p-2 border rounded ${isDarkMode ? 'text-slate-100 bg-slate-800 border-slate-600' : 'text-gray-900 bg-white border-gray-300'}`} value={data.label} onChange={(e) => updateNode(id, { label: e.target.value })} />
           <label className={`block text-sm font-bold ${isDarkMode ? 'text-slate-100' : 'text-gray-800'}`}>Content / Question</label>
           <textarea className={`w-full p-2 border rounded min-h-[100px] ${isDarkMode ? 'text-slate-100 bg-slate-800 border-slate-600' : 'text-gray-900 bg-white border-gray-300'}`} value={data.content} onChange={(e) => updateNode(id, { content: e.target.value })} />
@@ -135,7 +136,7 @@ const PropertiesPanel = ({ selectedNode, updateNode }: { selectedNode: AppNode |
         {(data.type === 'radio' || data.type === 'checkbox') && (
           <div className="space-y-3">
             <div className="flex justify-between items-center">
-              <label className={`text-sm font-bold ${isDarkMode ? 'text-slate-100' : 'text-gray-800'}`}>Options</label>
+              <label className={`text-sm font-bold ${isDarkMode ? 'text-slate-100' : 'text-gray-800'}`}>{language === 'ru' ? 'Варианты' : 'Options'}</label>
               <button onClick={addOption} className={`text-xs flex items-center gap-1 font-semibold ${isDarkMode ? 'text-blue-300' : 'text-blue-700'}`}><Plus size={12} /> Add</button>
             </div>
             <div className="space-y-2">
@@ -145,7 +146,7 @@ const PropertiesPanel = ({ selectedNode, updateNode }: { selectedNode: AppNode |
                     <input className={`flex-1 p-1.5 text-sm border rounded ${isDarkMode ? 'text-slate-100 bg-slate-800 border-slate-600' : 'text-gray-900 bg-white border-gray-300'}`} value={opt.label} onChange={(e) => updateOption(opt.id, { label: e.target.value })} />
                     <button onClick={() => removeOption(opt.id)} className="text-red-500"><Trash2 size={14} /></button>
                   </div>
-                  <input placeholder="Подсказка опции" className={`w-full p-1.5 text-xs border rounded ${isDarkMode ? 'text-slate-100 bg-slate-800 border-slate-600' : 'text-gray-900 bg-white border-gray-300'}`} value={opt.hint || ''} onChange={(e) => updateOption(opt.id, { hint: e.target.value })} />
+                  <input placeholder={language === 'ru' ? 'Подсказка варианта' : 'Option hint'} className={`w-full p-1.5 text-xs border rounded ${isDarkMode ? 'text-slate-100 bg-slate-800 border-slate-600' : 'text-gray-900 bg-white border-gray-300'}`} value={opt.hint || ''} onChange={(e) => updateOption(opt.id, { hint: e.target.value })} />
                 </div>
               ))}
             </div>
@@ -156,7 +157,7 @@ const PropertiesPanel = ({ selectedNode, updateNode }: { selectedNode: AppNode |
           <div className={`space-y-3 border-t pt-4 ${isDarkMode ? 'border-slate-700' : 'border-gray-300'}`}>
             <div className="flex justify-between items-center">
               <label className={`text-sm font-bold ${isDarkMode ? 'text-slate-100' : 'text-gray-800'}`}>Table choice layout</label>
-              {!data.tableConfig && <button onClick={initTable} className="text-xs text-blue-500">Init from options</button>}
+              {!data.tableConfig && <button onClick={initTable} className="text-xs text-blue-500">{language === 'ru' ? 'Создать из вариантов' : 'Init from options'}</button>}
             </div>
             <div className="flex gap-2">
               <button onClick={() => addCell(false)} className="text-xs text-blue-500">+ Option cell</button>
@@ -173,11 +174,11 @@ const PropertiesPanel = ({ selectedNode, updateNode }: { selectedNode: AppNode |
                   </div>
                   {!cell.isLegend && (
                     <select value={cell.optionId || ''} onChange={(e) => updateCell(cell.id, { optionId: e.target.value || undefined })} className={`w-full p-1 text-xs border rounded ${isDarkMode ? 'text-slate-100 bg-slate-800 border-slate-600' : 'text-gray-900 bg-white border-gray-300'}`}>
-                      <option value="">No option</option>
+                      <option value="">{language === 'ru' ? 'Без варианта' : 'No option'}</option>
                       {data.options?.map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
                     </select>
                   )}
-                  <input placeholder="Подсказка ячейки" className={`w-full p-1 text-xs border rounded ${isDarkMode ? 'text-slate-100 bg-slate-800 border-slate-600' : 'text-gray-900 bg-white border-gray-300'}`} value={cell.hint || ''} onChange={(e) => updateCell(cell.id, { hint: e.target.value })} />
+                  <input placeholder={language === 'ru' ? 'Подсказка ячейки' : 'Cell hint'} className={`w-full p-1 text-xs border rounded ${isDarkMode ? 'text-slate-100 bg-slate-800 border-slate-600' : 'text-gray-900 bg-white border-gray-300'}`} value={cell.hint || ''} onChange={(e) => updateCell(cell.id, { hint: e.target.value })} />
                 </div>
               ))}
             </div>
@@ -186,9 +187,9 @@ const PropertiesPanel = ({ selectedNode, updateNode }: { selectedNode: AppNode |
 
         <div className={`space-y-3 border-t pt-4 ${isDarkMode ? 'border-slate-700' : 'border-gray-300'}`}>
           <div className="flex gap-2 text-xs">
-            <button onClick={() => addContentBlock('link')} className="text-blue-500">+ Link</button>
-            <button onClick={() => addContentBlock('image')} className="text-blue-500">+ Image</button>
-            <button onClick={() => addContentBlock('table')} className="text-blue-500">+ Table</button>
+            <button onClick={() => addContentBlock('link')} className="text-blue-500">+ {language === 'ru' ? 'Ссылка' : 'Link'}</button>
+            <button onClick={() => addContentBlock('image')} className="text-blue-500">+ {language === 'ru' ? 'Изображение' : 'Image'}</button>
+            <button onClick={() => addContentBlock('table')} className="text-blue-500">+ {language === 'ru' ? 'Таблица' : 'Table'}</button>
           </div>
           {data.additionalContent?.map((block) => (
             <div key={block.id} className={`p-2 border rounded space-y-2 ${isDarkMode ? 'border-slate-700' : 'border-gray-300'}`}>
@@ -209,14 +210,14 @@ const PropertiesPanel = ({ selectedNode, updateNode }: { selectedNode: AppNode |
         {data.type === 'checkbox' && (
           <div className={`space-y-3 border-t pt-4 ${isDarkMode ? 'border-slate-700' : 'border-gray-300'}`}>
              <div className="flex justify-between items-center">
-              <label className={`text-sm font-bold ${isDarkMode ? 'text-slate-100' : 'text-gray-800'}`}>Output Paths</label>
-              <button onClick={addPath} className={`text-xs flex items-center gap-1 font-semibold ${isDarkMode ? 'text-purple-300' : 'text-purple-700'}`}><Plus size={12} /> Add Path</button>
+              <label className={`text-sm font-bold ${isDarkMode ? 'text-slate-100' : 'text-gray-800'}`}>{language === 'ru' ? 'Выходные пути' : 'Output Paths'}</label>
+              <button onClick={addPath} className={`text-xs flex items-center gap-1 font-semibold ${isDarkMode ? 'text-purple-300' : 'text-purple-700'}`}><Plus size={12} /> {language === 'ru' ? 'Добавить путь' : 'Add Path'}</button>
             </div>
             <div className="space-y-4">
               {data.paths?.map(path => (
                 <div key={path.id} className={`p-3 rounded border ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'}`}>
                   <div className="flex justify-between mb-2">
-                     <input className={`flex-1 p-1 text-xs border rounded font-medium ${isDarkMode ? 'bg-slate-700 border-slate-600 text-slate-100' : 'bg-gray-50 border-gray-300 text-gray-900'}`} value={path.label} onChange={(e) => updatePath(path.id, { label: e.target.value })} placeholder="Path Name" />
+                     <input className={`flex-1 p-1 text-xs border rounded font-medium ${isDarkMode ? 'bg-slate-700 border-slate-600 text-slate-100' : 'bg-gray-50 border-gray-300 text-gray-900'}`} value={path.label} onChange={(e) => updatePath(path.id, { label: e.target.value })} placeholder={language === 'ru' ? 'Название пути' : 'Path Name'} />
                      <button onClick={() => removePath(path.id)} className="ml-2 text-red-500"><Trash2 size={12} /></button>
                   </div>
                   {data.options?.map(opt => (
@@ -237,7 +238,7 @@ const PropertiesPanel = ({ selectedNode, updateNode }: { selectedNode: AppNode |
         {data.type === 'end' && (
           <div className="flex items-center gap-2">
             <input type="checkbox" id="canRestart" checked={data.canRestart || false} onChange={(e) => updateNode(id, { canRestart: e.target.checked })} />
-            <label htmlFor="canRestart" className={`text-sm font-medium ${isDarkMode ? 'text-slate-100' : 'text-gray-800'}`}>Allow Restart</label>
+            <label htmlFor="canRestart" className={`text-sm font-medium ${isDarkMode ? 'text-slate-100' : 'text-gray-800'}`}>{language === 'ru' ? 'Разрешить перезапуск' : 'Allow Restart'}</label>
           </div>
         )}
       </div>
