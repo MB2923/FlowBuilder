@@ -13,6 +13,24 @@ const defaultFeatures = {
   enableCopyButton: true,
 };
 
+const parseMarkdownTable = (markdown: string) => {
+  const rows = markdown
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('|') && line.endsWith('|'))
+    .map((line) => line.slice(1, -1).split('|').map((cell) => cell.trim()));
+
+  if (rows.length < 2) return null;
+  const [header, separator, ...body] = rows;
+  const isSeparator = separator.every((cell) => /^:?-{3,}:?$/.test(cell));
+  if (!isSeparator) return null;
+
+  return {
+    header,
+    body: body.filter((row) => row.some((cell) => cell.length > 0)),
+  };
+};
+
 const Viewer = ({
   nodes,
   edges,
@@ -138,7 +156,37 @@ const Viewer = ({
             <div className="font-semibold mb-1">{block.title}</div>
             {block.type === 'link' && <a href={block.url} target="_blank" rel="noreferrer" className="underline text-blue-500">{block.url}</a>}
             {block.type === 'image' && <img src={block.url} alt={block.title} className="max-h-52 rounded" />}
-            {block.type === 'table' && <pre className="whitespace-pre-wrap text-xs">{block.markdown}</pre>}
+            {block.type === 'table' && (() => {
+              const tableData = parseMarkdownTable(block.markdown);
+              if (!tableData) return <pre className="whitespace-pre-wrap text-xs">{block.markdown}</pre>;
+
+              return (
+                <div className="overflow-x-auto">
+                  <table className={`w-full text-xs border-collapse ${isDarkMode ? 'text-slate-200' : 'text-gray-700'}`}>
+                    <thead>
+                      <tr>
+                        {tableData.header.map((cell, index) => (
+                          <th key={`${block.id}-h-${index}`} className={`border px-2 py-1 text-left font-semibold ${isDarkMode ? 'border-slate-600' : 'border-gray-300'}`}>
+                            {cell}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tableData.body.map((row, rowIndex) => (
+                        <tr key={`${block.id}-r-${rowIndex}`}>
+                          {tableData.header.map((_, colIndex) => (
+                            <td key={`${block.id}-c-${rowIndex}-${colIndex}`} className={`border px-2 py-1 ${isDarkMode ? 'border-slate-700' : 'border-gray-300'}`}>
+                              {row[colIndex] || ''}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
           </div>
         ))}
       </div>
