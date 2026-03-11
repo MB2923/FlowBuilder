@@ -164,12 +164,21 @@ const App = () => {
         id: `node-${Date.now()}`,
         type,
         position,
-        data: { 
-          label: `New ${NODE_TYPES_CONFIG[type].label}`, 
-          content: 'Click to edit content...', 
+        data: {
+          label: `New ${NODE_TYPES_CONFIG[type].label}`,
+          content: 'Click to edit content...',
           type,
           options: [],
-          paths: []
+          paths: [],
+          additionalContent: [],
+          tableConfig: { columns: 2, cells: [] },
+          features: {
+            enableTitleHint: true,
+            enableOptionHints: true,
+            enableAdditionalContent: true,
+            enableTableLayout: false,
+            enableCopyButton: true,
+          },
         },
       };
 
