@@ -11,8 +11,25 @@ const defaultFeatures = {
   enableCopyButton: true,
 };
 
+const panelLocale = {
+  en: {
+    add: 'Add',
+    initFromOptions: 'Init from options',
+    addOptionCell: '+ Option cell',
+    addLegendCell: '+ Legend cell',
+  },
+  ru: {
+    add: 'Добавить',
+    initFromOptions: 'Создать из вариантов',
+    addOptionCell: '+ Ячейка варианта',
+    addLegendCell: '+ Ячейка легенды',
+  },
+} as const;
+
 const PropertiesPanel = ({ selectedNode, updateNode, language }: { selectedNode: AppNode | null, updateNode: (id: string, data: Partial<NodeData>) => void, language: Language }) => {
   const isDarkMode = useContext(ThemeModeContext);
+  const panelText = panelLocale[language];
+
   if (!selectedNode) return (
     <div className={`w-80 border-l p-4 flex flex-col items-center justify-center text-center ${isDarkMode ? 'border-slate-700 bg-slate-900 text-slate-400' : 'border-gray-200 bg-gray-100 text-gray-500'}`}>
       <Settings size={48} className="mb-4 opacity-30" />
@@ -137,7 +154,7 @@ const PropertiesPanel = ({ selectedNode, updateNode, language }: { selectedNode:
           <div className="space-y-3">
             <div className="flex justify-between items-center">
               <label className={`text-sm font-bold ${isDarkMode ? 'text-slate-100' : 'text-gray-800'}`}>{language === 'ru' ? 'Варианты' : 'Options'}</label>
-              <button onClick={addOption} className={`text-xs flex items-center gap-1 font-semibold ${isDarkMode ? 'text-blue-300' : 'text-blue-700'}`}><Plus size={12} /> Add</button>
+              <button onClick={addOption} className={`text-xs flex items-center gap-1 font-semibold ${isDarkMode ? 'text-blue-300' : 'text-blue-700'}`}><Plus size={12} /> {panelText.add}</button>
             </div>
             <div className="space-y-2">
               {data.options?.map(opt => (
@@ -157,11 +174,11 @@ const PropertiesPanel = ({ selectedNode, updateNode, language }: { selectedNode:
           <div className={`space-y-3 border-t pt-4 ${isDarkMode ? 'border-slate-700' : 'border-gray-300'}`}>
             <div className="flex justify-between items-center">
               <label className={`text-sm font-bold ${isDarkMode ? 'text-slate-100' : 'text-gray-800'}`}>Table choice layout</label>
-              {!data.tableConfig && <button onClick={initTable} className="text-xs text-blue-500">{language === 'ru' ? 'Создать из вариантов' : 'Init from options'}</button>}
+              {!data.tableConfig && <button onClick={initTable} className="text-xs text-blue-500">{panelText.initFromOptions}</button>}
             </div>
             <div className="flex gap-2">
-              <button onClick={() => addCell(false)} className="text-xs text-blue-500">+ Option cell</button>
-              <button onClick={() => addCell(true)} className="text-xs text-purple-500">+ Legend cell</button>
+              <button onClick={() => addCell(false)} className="text-xs text-blue-500">{panelText.addOptionCell}</button>
+              <button onClick={() => addCell(true)} className="text-xs text-purple-500">{panelText.addLegendCell}</button>
             </div>
             <input type="number" min={1} max={6} value={data.tableConfig?.columns || 2} onChange={(e) => updateNode(id, { tableConfig: { columns: Number(e.target.value), cells: data.tableConfig?.cells || [] } })} className={`w-24 p-1 border rounded text-xs ${isDarkMode ? 'text-slate-100 bg-slate-800 border-slate-600' : 'text-gray-900 bg-white border-gray-300'}`} />
             <div className="space-y-2">
