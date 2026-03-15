@@ -51,6 +51,12 @@ const PropertiesPanel = ({ selectedNode, updateNode, language }: { selectedNode:
     setActiveCellId(null);
   }, [id]);
 
+  useEffect(() => {
+    if (activeCellId && !data.tableConfig?.cells?.some((cell) => cell.id === activeCellId)) {
+      setActiveCellId(null);
+    }
+  }, [activeCellId, data.tableConfig?.cells]);
+
   const features = { ...defaultFeatures, ...(data.features || {}) };
 
   const addOption = () => {
