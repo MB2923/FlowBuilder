@@ -63,6 +63,9 @@ const LANG_STORAGE_KEY = 'flowbuilder-language';
 const MAX_HISTORY_SIZE = 100;
 const FLOW_URL_PARAM = 'flowUrl';
 const FLOW_DATA_PARAM = 'flowData';
+const MIN_PROPERTIES_PANEL_WIDTH = 280;
+const MAX_PROPERTIES_PANEL_WIDTH = 560;
+const DEFAULT_PROPERTIES_PANEL_WIDTH = 320;
 
 const encodeFlowData = (flow: { nodes: AppNode[]; edges: Edge[] }) => {
   const json = JSON.stringify(flow);
@@ -89,6 +92,7 @@ const App = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [language, setLanguage] = useState<Language>('en');
   const [showSettings, setShowSettings] = useState(false);
+  const [propertiesPanelWidth, setPropertiesPanelWidth] = useState(DEFAULT_PROPERTIES_PANEL_WIDTH);
   const edgeColor = isDarkMode ? '#94a3b8' : '#475569';
   const defaultEdgeOptions = useMemo(() => ({
     animated: false,
@@ -152,6 +156,32 @@ const App = () => {
   }, [language]);
 
   const selectedNode = useMemo(() => nodes.find(n => n.id === selectedNodeId) || null, [nodes, selectedNodeId]);
+
+  const handlePropertiesPanelResize = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = propertiesPanelWidth;
+
+    const onPointerMove = (moveEvent: MouseEvent) => {
+      const nextWidth = Math.min(
+        MAX_PROPERTIES_PANEL_WIDTH,
+        Math.max(MIN_PROPERTIES_PANEL_WIDTH, startWidth - (moveEvent.clientX - startX)),
+      );
+      setPropertiesPanelWidth(nextWidth);
+    };
+
+    const stopResize = () => {
+      window.removeEventListener('mousemove', onPointerMove);
+      window.removeEventListener('mouseup', stopResize);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    window.addEventListener('mousemove', onPointerMove);
+    window.addEventListener('mouseup', stopResize);
+  }, [propertiesPanelWidth]);
 
   const commitSnapshot = useCallback((nextNodes: AppNode[], nextEdges: Edge[]) => {
     setHistory((prevHistory) => {
@@ -709,7 +739,26 @@ const App = () => {
 
         {/* Properties Panel */}
         {selectedNode && (
-          <PropertiesPanel selectedNode={selectedNode} updateNode={updateNode} language={language} />
+          <div
+            className="flex h-full shrink-0"
+            style={{ width: `${propertiesPanelWidth}px` }}
+          >
+            <div
+              className={`w-1 h-full cursor-col-resize group ${isDarkMode ? 'bg-slate-800 hover:bg-blue-500/60' : 'bg-gray-200 hover:bg-blue-400/80'}`}
+              onMouseDown={handlePropertiesPanelResize}
+              role="separator"
+              aria-orientation="vertical"
+              aria-label={language === 'ru' ? 'Изменить ширину панели свойств' : 'Resize properties panel'}
+            >
+              <div className={`mx-auto h-full w-px transition-colors ${isDarkMode ? 'bg-slate-700 group-hover:bg-blue-400' : 'bg-gray-300 group-hover:bg-blue-500'}`} />
+            </div>
+            <PropertiesPanel
+              selectedNode={selectedNode}
+              updateNode={updateNode}
+              language={language}
+              className="flex-1"
+            />
+          </div>
         )}
       </div>
       </LanguageContext.Provider>
