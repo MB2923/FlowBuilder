@@ -1,7 +1,8 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import { Plus, Settings, Trash2 } from 'lucide-react';
 import { AdditionalContentBlock, AppNode, LogicPath, NodeData, TableCell, ThemeModeContext } from '../flow/types';
 import { Language } from '../flow/i18n';
+import { getTableCellClasses, getTableGridTemplateColumns } from './tableLayoutStyles';
 
 const defaultFeatures = {
   enableTitleHint: true,
@@ -17,12 +18,18 @@ const panelLocale = {
     initFromOptions: 'Init from options',
     addOptionCell: '+ Option cell',
     addLegendCell: '+ Legend cell',
+    cellLegendType: 'legend',
+    cellOptionType: 'option',
+    legendCell: 'Legend cell',
   },
   ru: {
     add: 'Добавить',
     initFromOptions: 'Создать из вариантов',
     addOptionCell: '+ Ячейка варианта',
     addLegendCell: '+ Ячейка легенды',
+    cellLegendType: 'легенда',
+    cellOptionType: 'вариант',
+    legendCell: 'Ячейка легенды',
   },
 } as const;
 
@@ -39,6 +46,11 @@ const PropertiesPanel = ({ selectedNode, updateNode, language }: { selectedNode:
   );
 
   const { data, id } = selectedNode;
+
+  useEffect(() => {
+    setActiveCellId(null);
+  }, [id]);
+
   const features = { ...defaultFeatures, ...(data.features || {}) };
 
   const addOption = () => {
@@ -191,7 +203,7 @@ const PropertiesPanel = ({ selectedNode, updateNode, language }: { selectedNode:
               <button onClick={() => addCell(true)} className="text-xs text-purple-500">{panelText.addLegendCell}</button>
             </div>
             <input type="number" min={1} max={6} value={data.tableConfig?.columns || 2} onChange={(e) => updateNode(id, { tableConfig: { columns: Number(e.target.value), cells: data.tableConfig?.cells || [] } })} className={`w-24 p-1 border rounded text-xs ${isDarkMode ? 'text-slate-100 bg-slate-800 border-slate-600' : 'text-gray-900 bg-white border-gray-300'}`} />
-            <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(1, data.tableConfig?.columns || 2)}, minmax(0,1fr))` }}>
+            <div className="grid gap-2" style={{ gridTemplateColumns: getTableGridTemplateColumns(data.tableConfig?.columns) }}>
               {data.tableConfig?.cells?.map((cell) => {
                 const isLegend = !!cell.isLegend;
                 const isActive = activeCellId === cell.id;
@@ -199,13 +211,13 @@ const PropertiesPanel = ({ selectedNode, updateNode, language }: { selectedNode:
                   <div
                     key={cell.id}
                     onClick={() => setActiveCellId(cell.id)}
-                    className={`relative p-2 rounded text-xs border cursor-pointer ${isLegend ? 'opacity-70 italic' : ''} ${isActive ? (isDarkMode ? 'ring-1 ring-blue-400' : 'ring-1 ring-blue-500') : ''} ${isDarkMode ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-white border-gray-200 text-gray-800'}`}
+                    className={`${getTableCellClasses(isDarkMode, isLegend)} cursor-pointer ${isActive ? (isDarkMode ? 'ring-1 ring-blue-400' : 'ring-1 ring-blue-500') : ''}`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="truncate font-medium">{cell.label}</p>
-                        <p className={isDarkMode ? 'text-[11px] text-slate-400' : 'text-[11px] text-gray-500'}>{isLegend ? 'legend' : 'option'}</p>
-                        <p className={isDarkMode ? 'text-[11px] text-slate-300 truncate' : 'text-[11px] text-gray-600 truncate'}>{isLegend ? (language === 'ru' ? 'Легенда' : 'Legend cell') : getOptionLabel(cell.optionId)}</p>
+                        <p className={isDarkMode ? 'text-[11px] text-slate-400' : 'text-[11px] text-gray-500'}>{isLegend ? panelText.cellLegendType : panelText.cellOptionType}</p>
+                        <p className={isDarkMode ? 'text-[11px] text-slate-300 truncate' : 'text-[11px] text-gray-600 truncate'}>{isLegend ? panelText.legendCell : getOptionLabel(cell.optionId)}</p>
                       </div>
                       <button
                         onClick={(e) => {

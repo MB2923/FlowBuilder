@@ -4,6 +4,7 @@ import { CircleHelp, ExternalLink, Image as ImageIcon, Table as TableIcon } from
 import { NODE_TYPES_CONFIG } from '../flow/config';
 import { LanguageContext, NodeData, NodeType, ThemeModeContext } from '../flow/types';
 import { NODE_TYPE_TEXT } from '../flow/i18n';
+import { getTableCellClasses, getTableGridTemplateColumns } from './tableLayoutStyles';
 
 const isFeatureEnabled = (data: NodeData, key: keyof NonNullable<NodeData['features']>) => data.features?.[key] !== false;
 
@@ -82,11 +83,11 @@ const renderOptionsTable = (data: NodeData, isDarkMode: boolean, allowHandles: b
   const columns = Math.max(1, data.tableConfig?.columns || 2);
   const cells = data.tableConfig?.cells || [];
   return (
-    <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0,1fr))` }}>
+    <div className="grid gap-2" style={{ gridTemplateColumns: getTableGridTemplateColumns(columns) }}>
       {cells.map((cell) => {
         const isLegend = !!cell.isLegend;
         return (
-          <div key={cell.id} className={`relative p-2 rounded text-xs border ${isLegend ? 'opacity-70 italic' : ''} ${isDarkMode ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-white border-gray-200 text-gray-800'}`}>
+          <div key={cell.id} className={getTableCellClasses(isDarkMode, isLegend)}>
             <span className="flex items-center">{cell.label}<HintBadge hint={cell.hint} /></span>
             {allowHandles && !isLegend && cell.optionId && (
               <Handle type="source" position={Position.Right} id={cell.optionId} style={{ top: '50%', right: '-24px' }} className="!bg-blue-500" />
