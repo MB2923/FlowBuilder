@@ -39,7 +39,7 @@ const PropertiesPanel = ({ selectedNode, updateNode, language }: { selectedNode:
   const panelText = panelLocale[language];
 
   if (!selectedNode) return (
-    <div className={`w-80 border-l p-4 flex flex-col items-center justify-center text-center ${isDarkMode ? 'border-slate-700 bg-slate-900 text-slate-400' : 'border-gray-200 bg-gray-100 text-gray-500'}`}>
+    <div className={`w-80 min-w-[280px] max-w-[680px] shrink-0 resize-x overflow-auto border-l p-4 flex flex-col items-center justify-center text-center ${isDarkMode ? 'border-slate-700 bg-slate-900 text-slate-400' : 'border-gray-200 bg-gray-100 text-gray-500'}`}>
       <Settings size={48} className="mb-4 opacity-30" />
       <p>{language === 'ru' ? 'Выберите узел для редактирования свойств' : 'Select a node to edit properties'}</p>
     </div>
@@ -151,7 +151,7 @@ const PropertiesPanel = ({ selectedNode, updateNode, language }: { selectedNode:
   };
 
   return (
-    <div className={`w-80 border-l flex flex-col h-full overflow-hidden ${isDarkMode ? 'border-slate-700 bg-slate-900' : 'border-gray-200 bg-gray-100'}`}>
+    <div className={`w-80 min-w-[280px] max-w-[680px] shrink-0 resize-x border-l flex flex-col h-full overflow-hidden ${isDarkMode ? 'border-slate-700 bg-slate-900' : 'border-gray-200 bg-gray-100'}`}>
       <div className={`p-4 border-b font-semibold flex justify-between items-center ${isDarkMode ? 'border-slate-700 bg-slate-800 text-slate-100' : 'bg-gray-300 text-gray-800'}`}>
         <span>{language === 'ru' ? 'Редактирование узла' : 'Edit Node'}</span>
         <span className={`text-xs px-2 py-1 rounded uppercase ${isDarkMode ? 'bg-slate-700 text-slate-200' : 'bg-white/60 text-gray-700'}`}>{data.type}</span>
