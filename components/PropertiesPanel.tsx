@@ -198,6 +198,10 @@ const PropertiesPanel = ({ selectedNode, updateNode, language, className = '' }:
                     tabIndex={0}
                     onClick={() => setEditingCellId(isEditing ? null : cell.id)}
                     onKeyDown={(e) => {
+                      if (e.target !== e.currentTarget) {
+                        return;
+                      }
+
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
                         setEditingCellId(isEditing ? null : cell.id);
