@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import React, { useContext, useState } from 'react';
 import { Plus, Settings, Trash2 } from 'lucide-react';
 import { AdditionalContentBlock, AppNode, LogicPath, NodeData, TableCell, ThemeModeContext } from '../flow/types';
 import { Language } from '../flow/i18n';
@@ -28,6 +28,7 @@ const panelLocale = {
 
 const PropertiesPanel = ({ selectedNode, updateNode, language }: { selectedNode: AppNode | null, updateNode: (id: string, data: Partial<NodeData>) => void, language: Language }) => {
   const isDarkMode = useContext(ThemeModeContext);
+  const [activeCellId, setActiveCellId] = useState<string | null>(null);
   const panelText = panelLocale[language];
 
   if (!selectedNode) return (
@@ -115,7 +116,16 @@ const PropertiesPanel = ({ selectedNode, updateNode, language }: { selectedNode:
 
   const removeCell = (cellId: string) => {
     const tableConfig = data.tableConfig || { columns: 2, cells: [] };
+    if (activeCellId === cellId) {
+      setActiveCellId(null);
+    }
     updateNode(id, { tableConfig: { ...tableConfig, cells: tableConfig.cells.filter(c => c.id !== cellId) } });
+  };
+
+  const getOptionLabel = (optionId?: string) => {
+    if (!optionId) return language === 'ru' ? 'Без варианта' : 'No option';
+    const option = data.options?.find((opt) => opt.id === optionId);
+    return option?.label || (language === 'ru' ? 'Не найдено' : 'Not found');
   };
 
   const setFeature = (key: keyof typeof defaultFeatures, value: boolean) => {
@@ -181,23 +191,70 @@ const PropertiesPanel = ({ selectedNode, updateNode, language }: { selectedNode:
               <button onClick={() => addCell(true)} className="text-xs text-purple-500">{panelText.addLegendCell}</button>
             </div>
             <input type="number" min={1} max={6} value={data.tableConfig?.columns || 2} onChange={(e) => updateNode(id, { tableConfig: { columns: Number(e.target.value), cells: data.tableConfig?.cells || [] } })} className={`w-24 p-1 border rounded text-xs ${isDarkMode ? 'text-slate-100 bg-slate-800 border-slate-600' : 'text-gray-900 bg-white border-gray-300'}`} />
-            <div className="space-y-2">
-              {data.tableConfig?.cells?.map((cell) => (
-                <div key={cell.id} className={`p-2 border rounded space-y-1 ${isDarkMode ? 'border-slate-700' : 'border-gray-300'}`}>
-                  <div className="flex gap-2 items-center">
-                    <input className={`flex-1 p-1 text-xs border rounded ${isDarkMode ? 'text-slate-100 bg-slate-800 border-slate-600' : 'text-gray-900 bg-white border-gray-300'}`} value={cell.label} onChange={(e) => updateCell(cell.id, { label: e.target.value })} />
-                    <label className="text-xs"><input type="checkbox" checked={!!cell.isLegend} onChange={(e) => updateCell(cell.id, { isLegend: e.target.checked })} /> legend</label>
-                    <button onClick={() => removeCell(cell.id)} className="text-red-500"><Trash2 size={12} /></button>
+            <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(1, data.tableConfig?.columns || 2)}, minmax(0,1fr))` }}>
+              {data.tableConfig?.cells?.map((cell) => {
+                const isLegend = !!cell.isLegend;
+                const isActive = activeCellId === cell.id;
+                return (
+                  <div
+                    key={cell.id}
+                    onClick={() => setActiveCellId(cell.id)}
+                    className={`relative p-2 rounded text-xs border cursor-pointer ${isLegend ? 'opacity-70 italic' : ''} ${isActive ? (isDarkMode ? 'ring-1 ring-blue-400' : 'ring-1 ring-blue-500') : ''} ${isDarkMode ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-white border-gray-200 text-gray-800'}`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium">{cell.label}</p>
+                        <p className={isDarkMode ? 'text-[11px] text-slate-400' : 'text-[11px] text-gray-500'}>{isLegend ? 'legend' : 'option'}</p>
+                        <p className={isDarkMode ? 'text-[11px] text-slate-300 truncate' : 'text-[11px] text-gray-600 truncate'}>{isLegend ? (language === 'ru' ? 'Легенда' : 'Legend cell') : getOptionLabel(cell.optionId)}</p>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeCell(cell.id);
+                        }}
+                        className="text-red-500"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+
+                    {isActive && (
+                      <div className="mt-2 space-y-2" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          className={`w-full p-1 text-xs border rounded ${isDarkMode ? 'text-slate-100 bg-slate-800 border-slate-600' : 'text-gray-900 bg-white border-gray-300'}`}
+                          value={cell.label}
+                          onChange={(e) => updateCell(cell.id, { label: e.target.value })}
+                          placeholder={language === 'ru' ? 'Название ячейки' : 'Cell label'}
+                        />
+                        <input
+                          placeholder={language === 'ru' ? 'Подсказка ячейки' : 'Cell hint'}
+                          className={`w-full p-1 text-xs border rounded ${isDarkMode ? 'text-slate-100 bg-slate-800 border-slate-600' : 'text-gray-900 bg-white border-gray-300'}`}
+                          value={cell.hint || ''}
+                          onChange={(e) => updateCell(cell.id, { hint: e.target.value })}
+                        />
+                        <label className="text-xs flex items-center gap-1">
+                          <input
+                            type="checkbox"
+                            checked={!!cell.isLegend}
+                            onChange={(e) => updateCell(cell.id, { isLegend: e.target.checked, optionId: e.target.checked ? undefined : cell.optionId })}
+                          />
+                          legend
+                        </label>
+                        {!cell.isLegend && (
+                          <select
+                            value={cell.optionId || ''}
+                            onChange={(e) => updateCell(cell.id, { optionId: e.target.value || undefined })}
+                            className={`w-full p-1 text-xs border rounded ${isDarkMode ? 'text-slate-100 bg-slate-800 border-slate-600' : 'text-gray-900 bg-white border-gray-300'}`}
+                          >
+                            <option value="">{language === 'ru' ? 'Без варианта' : 'No option'}</option>
+                            {data.options?.map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
+                          </select>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  {!cell.isLegend && (
-                    <select value={cell.optionId || ''} onChange={(e) => updateCell(cell.id, { optionId: e.target.value || undefined })} className={`w-full p-1 text-xs border rounded ${isDarkMode ? 'text-slate-100 bg-slate-800 border-slate-600' : 'text-gray-900 bg-white border-gray-300'}`}>
-                      <option value="">{language === 'ru' ? 'Без варианта' : 'No option'}</option>
-                      {data.options?.map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
-                    </select>
-                  )}
-                  <input placeholder={language === 'ru' ? 'Подсказка ячейки' : 'Cell hint'} className={`w-full p-1 text-xs border rounded ${isDarkMode ? 'text-slate-100 bg-slate-800 border-slate-600' : 'text-gray-900 bg-white border-gray-300'}`} value={cell.hint || ''} onChange={(e) => updateCell(cell.id, { hint: e.target.value })} />
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
