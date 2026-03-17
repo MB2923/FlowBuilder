@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import React, { useContext, useState } from 'react';
 import { Plus, Settings, Trash2 } from 'lucide-react';
 import { AdditionalContentBlock, AppNode, LogicPath, NodeData, TableCell, ThemeModeContext } from '../flow/types';
 import { Language } from '../flow/i18n';
@@ -29,6 +29,7 @@ const panelLocale = {
 const PropertiesPanel = ({ selectedNode, updateNode, language, className = '' }: { selectedNode: AppNode | null, updateNode: (id: string, data: Partial<NodeData>) => void, language: Language, className?: string }) => {
   const isDarkMode = useContext(ThemeModeContext);
   const panelText = panelLocale[language];
+  const [editingCellId, setEditingCellId] = useState<string | null>(null);
 
   if (!selectedNode) return (
     <div className={`w-full border-l p-4 flex flex-col items-center justify-center text-center ${className} ${isDarkMode ? 'border-slate-700 bg-slate-900 text-slate-400' : 'border-gray-200 bg-gray-100 text-gray-500'}`}>
@@ -116,6 +117,9 @@ const PropertiesPanel = ({ selectedNode, updateNode, language, className = '' }:
   const removeCell = (cellId: string) => {
     const tableConfig = data.tableConfig || { columns: 2, cells: [] };
     updateNode(id, { tableConfig: { ...tableConfig, cells: tableConfig.cells.filter(c => c.id !== cellId) } });
+    if (editingCellId === cellId) {
+      setEditingCellId(null);
+    }
   };
 
   const setFeature = (key: keyof typeof defaultFeatures, value: boolean) => {
@@ -181,23 +185,91 @@ const PropertiesPanel = ({ selectedNode, updateNode, language, className = '' }:
               <button onClick={() => addCell(true)} className="text-xs text-purple-500">{panelText.addLegendCell}</button>
             </div>
             <input type="number" min={1} max={6} value={data.tableConfig?.columns || 2} onChange={(e) => updateNode(id, { tableConfig: { columns: Number(e.target.value), cells: data.tableConfig?.cells || [] } })} className={`w-24 p-1 border rounded text-xs ${isDarkMode ? 'text-slate-100 bg-slate-800 border-slate-600' : 'text-gray-900 bg-white border-gray-300'}`} />
-            <div className="space-y-2">
-              {data.tableConfig?.cells?.map((cell) => (
-                <div key={cell.id} className={`p-2 border rounded space-y-1 ${isDarkMode ? 'border-slate-700' : 'border-gray-300'}`}>
-                  <div className="flex gap-2 items-center">
-                    <input className={`flex-1 p-1 text-xs border rounded ${isDarkMode ? 'text-slate-100 bg-slate-800 border-slate-600' : 'text-gray-900 bg-white border-gray-300'}`} value={cell.label} onChange={(e) => updateCell(cell.id, { label: e.target.value })} />
-                    <label className="text-xs"><input type="checkbox" checked={!!cell.isLegend} onChange={(e) => updateCell(cell.id, { isLegend: e.target.checked })} /> legend</label>
-                    <button onClick={() => removeCell(cell.id)} className="text-red-500"><Trash2 size={12} /></button>
+            <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(1, data.tableConfig?.columns || 2)}, minmax(0,1fr))` }}>
+              {data.tableConfig?.cells?.map((cell) => {
+                const isLegend = !!cell.isLegend;
+                const optionLabel = data.options?.find((opt) => opt.id === cell.optionId)?.label;
+                const isEditing = editingCellId === cell.id;
+
+                return (
+                  <div
+                    key={cell.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setEditingCellId(isEditing ? null : cell.id)}
+                    onKeyDown={(e) => {
+                      if (e.target !== e.currentTarget) {
+                        return;
+                      }
+
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setEditingCellId(isEditing ? null : cell.id);
+                      }
+                    }}
+                    className={`relative w-full text-left p-2 rounded text-xs border transition-colors cursor-pointer ${isLegend ? 'opacity-70 italic' : ''} ${isDarkMode ? 'bg-slate-900 border-slate-700 text-slate-100 hover:border-slate-500' : 'bg-white border-gray-200 text-gray-800 hover:border-gray-400'}`}
+                  >
+                    <div className={`flex items-start justify-between gap-2 ${isEditing ? 'mb-2' : ''}`}>
+                      <div className="min-w-0">
+                        <div className="font-medium truncate">{cell.label || (language === 'ru' ? 'Без названия' : 'Untitled')}</div>
+                        <div className={`mt-0.5 text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                          {isLegend ? 'legend' : 'option'}
+                          {!isLegend && (
+                            <span>
+                              {' · '}
+                              {optionLabel || (language === 'ru' ? 'Без варианта' : 'No option')}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeCell(cell.id);
+                        }}
+                        className="text-red-500 shrink-0"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+
+                    {isEditing && (
+                      <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          className={`w-full p-1 text-xs border rounded ${isDarkMode ? 'text-slate-100 bg-slate-800 border-slate-600' : 'text-gray-900 bg-white border-gray-300'}`}
+                          value={cell.label}
+                          onChange={(e) => updateCell(cell.id, { label: e.target.value })}
+                        />
+                        <input
+                          placeholder={language === 'ru' ? 'Подсказка ячейки' : 'Cell hint'}
+                          className={`w-full p-1 text-xs border rounded ${isDarkMode ? 'text-slate-100 bg-slate-800 border-slate-600' : 'text-gray-900 bg-white border-gray-300'}`}
+                          value={cell.hint || ''}
+                          onChange={(e) => updateCell(cell.id, { hint: e.target.value })}
+                        />
+                        <label className={`flex items-center gap-2 text-[11px] ${isDarkMode ? 'text-slate-300' : 'text-gray-600'}`}>
+                          <input
+                            type="checkbox"
+                            checked={!!cell.isLegend}
+                            onChange={(e) => updateCell(cell.id, { isLegend: e.target.checked, optionId: e.target.checked ? undefined : cell.optionId })}
+                          />
+                          legend
+                        </label>
+                        {!cell.isLegend && (
+                          <select
+                            value={cell.optionId || ''}
+                            onChange={(e) => updateCell(cell.id, { optionId: e.target.value || undefined })}
+                            className={`w-full p-1 text-xs border rounded ${isDarkMode ? 'text-slate-100 bg-slate-800 border-slate-600' : 'text-gray-900 bg-white border-gray-300'}`}
+                          >
+                            <option value="">{language === 'ru' ? 'Без варианта' : 'No option'}</option>
+                            {data.options?.map((opt) => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
+                          </select>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  {!cell.isLegend && (
-                    <select value={cell.optionId || ''} onChange={(e) => updateCell(cell.id, { optionId: e.target.value || undefined })} className={`w-full p-1 text-xs border rounded ${isDarkMode ? 'text-slate-100 bg-slate-800 border-slate-600' : 'text-gray-900 bg-white border-gray-300'}`}>
-                      <option value="">{language === 'ru' ? 'Без варианта' : 'No option'}</option>
-                      {data.options?.map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
-                    </select>
-                  )}
-                  <input placeholder={language === 'ru' ? 'Подсказка ячейки' : 'Cell hint'} className={`w-full p-1 text-xs border rounded ${isDarkMode ? 'text-slate-100 bg-slate-800 border-slate-600' : 'text-gray-900 bg-white border-gray-300'}`} value={cell.hint || ''} onChange={(e) => updateCell(cell.id, { hint: e.target.value })} />
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
